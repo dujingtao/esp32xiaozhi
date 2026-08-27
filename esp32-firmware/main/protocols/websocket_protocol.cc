@@ -48,8 +48,9 @@ WebsocketProtocol::~WebsocketProtocol() {
 }
 
 bool WebsocketProtocol::Start() {
-    // Connect to WebSocket server on startup for persistent standby and proactive wake
-    return ConnectWebSocket(false);
+    // Schedule non-blocking background connection to WebSocket server for persistent standby
+    ScheduleReconnect();
+    return true;
 }
 
 bool WebsocketProtocol::SendAudio(std::unique_ptr<AudioStreamPacket> packet) {
@@ -99,7 +100,7 @@ bool WebsocketProtocol::SendText(const std::string& text) {
 }
 
 bool WebsocketProtocol::IsAudioChannelOpened() const {
-    return websocket_ != nullptr && websocket_->IsConnected() && !error_occurred_ && !IsTimeout();
+    return websocket_ != nullptr && websocket_->IsConnected() && !error_occurred_;
 }
 
 void WebsocketProtocol::CloseAudioChannel(bool send_goodbye) {
@@ -240,21 +241,21 @@ bool WebsocketProtocol::ConnectWebSocket(bool report_error) {
         return false;
     }
 
-    // Wait for server hello
-    EventBits_t bits =
-        xEventGroupWaitBits(event_group_handle_, WEBSOCKET_PROTOCOL_SERVER_HELLO_EVENT, pdTRUE,
-                            pdFALSE, pdMS_TO_TICKS(10000));
-    if (!(bits & WEBSOCKET_PROTOCOL_SERVER_HELLO_EVENT)) {
-        ESP_LOGE(TAG, "Failed to receive server hello");
-        if (report_error) {
+    if (report_error) {
+        // Wait for server hello
+        EventBits_t bits =
+            xEventGroupWaitBits(event_group_handle_, WEBSOCKET_PROTOCOL_SERVER_HELLO_EVENT, pdTRUE,
+                                pdFALSE, pdMS_TO_TICKS(10000));
+        if (!(bits & WEBSOCKET_PROTOCOL_SERVER_HELLO_EVENT)) {
+            ESP_LOGE(TAG, "Failed to receive server hello");
             SetError(Lang::Strings::SERVER_TIMEOUT);
+            ScheduleReconnect();
+            return false;
         }
-        ScheduleReconnect();
-        return false;
-    }
 
-    if (on_audio_channel_opened_ != nullptr) {
-        on_audio_channel_opened_();
+        if (on_audio_channel_opened_ != nullptr) {
+            on_audio_channel_opened_();
+        }
     }
 
     return true;
@@ -309,6 +310,11 @@ void WebsocketProtocol::ParseServerHello(const cJSON* root) {
         if (cJSON_IsNumber(frame_duration)) {
             server_frame_duration_ = frame_duration->valueint;
         }
+    }
+
+    error_occurred_ = false;
+    if (on_connected_ != nullptr) {
+        on_connected_();
     }
 
     xEventGroupSetBits(event_group_handle_, WEBSOCKET_PROTOCOL_SERVER_HELLO_EVENT);
