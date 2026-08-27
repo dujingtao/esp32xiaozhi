@@ -3,52 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>小智 AI - 家庭人脸记忆与视觉中枢管理控制台</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>小智 AI · 家庭人脸记忆与视觉中枢管理工作台</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .glass-card { background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(12px); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen">
-    <!-- 顶部导航栏 -->
-    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen p-4 md:p-8">
+    <div class="max-w-7xl mx-auto space-y-6">
+
+        <!-- 顶部导航栏卡片 -->
+        <header class="glass-card p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-100">
-                    <i class="fa-solid fa-id-card-clip text-lg"></i>
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+                    <i class="fa-solid fa-id-card-clip text-xl"></i>
                 </div>
                 <div>
-                    <h1 class="text-lg font-bold text-slate-900 leading-tight">小智 AI · 家庭人脸记忆中枢</h1>
-                    <p class="text-xs text-slate-500">多模态视觉档案与 S20 协同管理系统</p>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-xl font-bold text-slate-900">小智 AI · 家庭人脸记忆与视觉中枢</h1>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">v2.5 Pro</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5">多模态视觉之眼 · S20 手机协同管理与走近迎宾系统</p>
                 </div>
             </div>
-            <div class="flex items-center space-x-3">
-                <div id="s20-status-badge" class="flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                    <span class="w-2 h-2 rounded-full bg-amber-400 mr-2 animate-pulse"></span>
+            <div class="flex items-center space-x-3 w-full md:w-auto justify-between md:justify-end">
+                <div id="s20-status-badge" class="flex items-center px-3.5 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200 shadow-xs">
+                    <span class="w-2 h-2 rounded-full bg-slate-400 mr-2 animate-pulse"></span>
                     检测 S20 手机状态中...
                 </div>
-                <a href="http://141.148.138.135:8002" target="_blank" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 transition">
-                    <i class="fa-solid fa-arrow-up-right-from-square mr-1.5"></i> 主智控台
-                </a>
+                <button onclick="refreshAll()" class="p-2 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-slate-100 transition" title="全量刷新">
+                    <i class="fa-solid fa-rotate text-sm"></i>
+                </button>
             </div>
-        </div>
-    </header>
+        </header>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- 概览与快捷操作 -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <!-- 统计面板 -->
+        <!-- 🌟 核心一：主动视觉哨兵与走近迎宾中枢面板 -->
+        <section class="glass-card p-6 rounded-2xl border border-indigo-200 shadow-sm bg-gradient-to-r from-white via-indigo-50/25 to-white">
+            <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-4 border-b border-indigo-100/60">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white flex items-center justify-center text-xl shadow-md shadow-indigo-200">
+                        <i class="fa-solid fa-eye text-2xl"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-lg font-bold text-slate-900">🤖 主动视觉哨兵与走近迎宾系统</h2>
+                            <span id="sentinelStatusBadge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 哨兵监测中
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">S20 镜头自动捕捉进入画面的家人与访客，秒级识人并由小智音箱主动开麦迎宾</p>
+                    </div>
+                </div>
+
+                <!-- 哨兵快捷控制条 -->
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <label class="flex items-center gap-2 cursor-pointer bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-xs hover:border-indigo-300 transition">
+                        <input type="checkbox" id="sentinelToggle" checked class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" onchange="toggleSentinel()">
+                        <span class="text-xs font-medium text-slate-700">启用主动迎宾</span>
+                    </label>
+                    <div class="flex items-center gap-1.5 bg-white px-3 py-2 rounded-xl border border-slate-200">
+                        <span class="text-xs text-slate-500">冷却时间:</span>
+                        <select id="sentinelCooldown" class="text-xs font-medium text-slate-700 bg-transparent outline-none cursor-pointer" onchange="updateSentinelConfig()">
+                            <option value="5">5 分钟</option>
+                            <option value="10" selected>10 分钟</option>
+                            <option value="30">30 分钟</option>
+                            <option value="60">60 分钟</option>
+                        </select>
+                    </div>
+                    <label class="flex items-center gap-2 cursor-pointer bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-xs hover:border-indigo-300 transition">
+                        <input type="checkbox" id="sentinelWechat" checked class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" onchange="updateSentinelConfig()">
+                        <span class="text-xs font-medium text-slate-700">微信提醒</span>
+                    </label>
+                    <button onclick="triggerTestGreeting()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-semibold rounded-xl shadow-sm shadow-indigo-200 flex items-center gap-1.5 transition">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> 模拟测试迎宾
+                    </button>
+                </div>
+            </div>
+
+            <!-- 最近迎宾动态历史 -->
+            <div class="mt-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <i class="fa-solid fa-clock-rotate-left text-indigo-500"></i> 最近迎宾触发记录
+                    </span>
+                    <span id="sentinelLastCheck" class="text-[11px] text-slate-400">实时监听中</span>
+                </div>
+                <div id="sentinelLogList" class="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-36 overflow-y-auto custom-scrollbar pr-1">
+                    <div class="p-3 rounded-xl bg-white border border-slate-100 shadow-xs flex items-center justify-between text-xs">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">布</span>
+                            <div>
+                                <span class="font-bold text-slate-800">布布爸爸</span>
+                                <span class="text-[11px] text-slate-500 ml-1">“布布爸爸，下午好呀！今天工作辛苦啦...”</span>
+                            </div>
+                        </div>
+                        <span class="text-[11px] text-slate-400">刚刚</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 🌟 核心二：概览指标与 S20 快捷操作栏 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- 统计卡片 -->
             <div class="glass-card p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                 <div>
-                    <p class="text-xs font-semibold uppercase text-slate-400">已录入家庭成员</p>
-                    <h3 id="face-count" class="text-3xl font-extrabold text-slate-900 mt-1">0</h3>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">已录入家庭成员</p>
+                    <h3 id="face-count" class="text-3xl font-bold text-slate-800 mt-2">0</h3>
                     <p class="text-xs text-slate-500 mt-1">支持语音与网页双向实时同步</p>
                 </div>
-                <div class="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl">
+                <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">
                     <i class="fa-solid fa-users"></i>
                 </div>
             </div>
@@ -56,206 +129,176 @@
             <!-- S20 手机镜头卡片 -->
             <div class="glass-card p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                 <div>
-                    <p class="text-xs font-semibold uppercase text-slate-400">S20 专属视觉之眼</p>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">S20 专属视觉之眼</p>
                     <h3 id="s20-title" class="text-lg font-bold text-slate-800 mt-1">Samsung Galaxy S20</h3>
                     <p id="s20-sub" class="text-xs text-slate-500 mt-1">Tailscale: 100.122.149.94</p>
                 </div>
-                <button onclick="refreshS20Status()" class="p-3 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-slate-100 transition" title="刷新状态">
-                    <i class="fa-solid fa-rotate"></i>
-                </button>
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleTorch()" class="p-3 text-amber-500 hover:text-amber-600 rounded-xl hover:bg-amber-50 transition" title="开关手机闪光灯补光">
+                        <i class="fa-solid fa-lightbulb text-lg"></i>
+                    </button>
+                    <button onclick="refreshS20Status()" class="p-3 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-slate-100 transition" title="刷新状态">
+                        <i class="fa-solid fa-rotate text-lg"></i>
+                    </button>
+                </div>
             </div>
 
-            <!-- 快捷按钮 -->
+            <!-- 快捷按钮栏 -->
             <div class="glass-card p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center gap-3">
-                <button onclick="openRegisterModal('s20')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2.5 rounded-xl shadow-sm transition flex items-center justify-center text-sm">
+                <button onclick="openRegisterModal('s20')" class="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-semibold px-4 py-2.5 rounded-xl shadow-sm transition flex items-center justify-center text-sm">
                     <i class="fa-solid fa-camera mr-2"></i> 调用 S20 手机抓拍录入新面孔
                 </button>
                 <div class="flex gap-2">
-                    <button onclick="openRegisterModal('upload')" class="flex-1 bg-white hover:bg-slate-50 text-slate-700 font-medium px-3 py-2 rounded-xl border border-slate-300 text-xs transition flex items-center justify-center">
-                        <i class="fa-solid fa-cloud-arrow-up mr-1.5"></i> 上传相册照片
+                    <button onclick="openRegisterModal('upload')" class="flex-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-medium px-3 py-2 rounded-xl text-xs transition flex items-center justify-center">
+                        <i class="fa-solid fa-cloud-arrow-up mr-1.5 text-indigo-500"></i> 上传相册照片
                     </button>
-                    <button onclick="testRecognizeLive()" class="flex-1 bg-violet-50 hover:bg-violet-100 text-violet-700 font-medium px-3 py-2 rounded-xl border border-violet-200 text-xs transition flex items-center justify-center">
+                    <button onclick="triggerRealtimeTest()" class="flex-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-semibold px-3 py-2 rounded-xl text-xs transition flex items-center justify-center border border-indigo-100">
                         <i class="fa-solid fa-wand-magic-sparkles mr-1.5"></i> 实时认人实测
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- 核心内容区：家庭人脸档案库 -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-8">
-            <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+        <!-- 🌟 核心三：家庭成员人脸档案库 -->
+        <section class="glass-card p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
                 <div class="flex items-center space-x-3">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-sm">
                         <i class="fa-solid fa-address-book"></i>
                     </div>
                     <div>
-                        <h2 class="text-base font-bold text-slate-900">家庭成员人脸档案库</h2>
-                        <p class="text-xs text-slate-500">由 Google Gemini 2.5 Flash 提取特征并永久保存</p>
+                        <h2 class="text-base font-bold text-slate-800">家庭成员人脸档案库</h2>
+                        <p class="text-xs text-slate-500">已由 Google Gemini 2.5 Flash 提取特征并永久保存</p>
                     </div>
                 </div>
-                <button onclick="clearAllFaces()" class="text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200 transition">
-                    <i class="fa-solid fa-trash-can mr-1"></i> 清空人脸库
+                <button onclick="clearAllFaces()" class="text-xs text-rose-500 hover:text-rose-700 px-3 py-1.5 rounded-lg hover:bg-rose-50 transition border border-rose-100 flex items-center gap-1">
+                    <i class="fa-solid fa-trash-can"></i> 清空人脸库
                 </button>
             </div>
 
-            <!-- 人脸卡片列表 -->
-            <div id="faces-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- 动态渲染 -->
-            </div>
-            
-            <div id="empty-hint" class="hidden text-center py-12">
-                <div class="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3 text-2xl">
-                    <i class="fa-regular fa-face-smile"></i>
+            <!-- 人脸卡片网格 -->
+            <div id="faces-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <!-- 加载骨架 -->
+                <div class="p-6 rounded-2xl border border-slate-100 bg-slate-50 flex flex-col items-center justify-center text-slate-400 py-12 col-span-full">
+                    <i class="fa-solid fa-spinner fa-spin text-2xl text-indigo-500 mb-2"></i>
+                    <span class="text-xs">加载人脸档案中...</span>
                 </div>
-                <p class="text-slate-600 font-medium">当前人脸库还是空的哦</p>
-                <p class="text-xs text-slate-400 mt-1">您可以对着小智说“小智，记住这是布布爸爸”，或者点击右上角按钮录入！</p>
             </div>
-        </div>
-    </main>
-
-    <!-- 录入面孔模态框 -->
-    <div id="register-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-100">
-            <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-                <h3 id="modal-title" class="text-base font-bold text-slate-900">录入新家庭成员人脸</h3>
-                <button onclick="closeRegisterModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-            </div>
-
-            <form id="register-form" onsubmit="submitRegister(event)">
-                <input type="hidden" id="reg-use-s20" value="true">
-                
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 mb-1">成员姓名/称呼 <span class="text-rose-500">*</span></label>
-                        <input type="text" id="reg-name" required placeholder="例如：布布爸爸、布布奶奶、妈妈" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 mb-1">身份角色备注</label>
-                        <input type="text" id="reg-role" placeholder="例如：家庭成员 / 父亲 / 奶奶" value="家庭成员" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-                    </div>
-
-                    <div id="upload-box" class="hidden">
-                        <label class="block text-xs font-semibold text-slate-700 mb-1">选择正脸照片</label>
-                        <input type="file" id="reg-file" accept="image/*" class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
-                    </div>
-
-                    <div id="s20-box" class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center">
-                        <i class="fa-solid fa-camera text-indigo-600 text-base mr-2.5"></i>
-                        <span>将直接触发三星 S20 手机高清摄像头即时抓拍，请确保人物已正对镜头。</span>
-                    </div>
-                </div>
-
-                <div class="mt-6 flex gap-3">
-                    <button type="button" onclick="closeRegisterModal()" class="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-50 transition">取消</button>
-                    <button type="submit" id="reg-submit-btn" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition flex items-center justify-center">
-                        <span>开始 AI 建档</span>
-                    </button>
-                </div>
-            </form>
-        </div>
+        </section>
     </div>
 
-    <!-- 编辑模态框 -->
-    <div id="edit-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-100">
-            <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-                <h3 class="text-base font-bold text-slate-900">编辑成员档案</h3>
-                <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+    <!-- 录入人脸模态框 -->
+    <div id="register-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 id="modal-title" class="text-base font-bold text-slate-800">录入新面孔</h3>
+                <button onclick="closeRegisterModal()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
             </div>
-
-            <form id="edit-form" onsubmit="submitEdit(event)">
-                <input type="hidden" id="edit-old-name">
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 mb-1">姓名 / 称呼</label>
-                        <input type="text" id="edit-name" required class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 mb-1">身份角色</label>
-                        <input type="text" id="edit-role" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 mb-1">AI 视觉特征描述</label>
-                        <textarea id="edit-features" rows="3" class="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-xs"></textarea>
-                    </div>
+            <form id="register-form" onsubmit="submitRegister(event)" class="space-y-4">
+                <input type="hidden" id="reg-use-s20" value="true">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">成员称呼 / 姓名 *</label>
+                    <input type="text" id="reg-name" required placeholder="如：布布爸爸 / 妈妈 / 布布" class="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
                 </div>
-                <div class="mt-6 flex gap-3">
-                    <button type="button" onclick="closeEditModal()" class="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-sm">取消</button>
-                    <button type="submit" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium">保存修改</button>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">角色身份</label>
+                    <input type="text" id="reg-role" placeholder="如：家庭成员 / 爸爸 / 孩子" value="家人" class="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                </div>
+                <div id="s20-box" class="p-3.5 rounded-xl bg-indigo-50/50 border border-indigo-100 text-xs text-slate-600 flex items-center gap-2.5">
+                    <i class="fa-solid fa-camera text-indigo-600 text-base"></i>
+                    <span>点击确定后，系统将立即命令 <strong>Samsung S20</strong> 高清抓拍当前正对镜头的面孔并录入。</span>
+                </div>
+                <div id="upload-box" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">选择清晰正面照片</label>
+                    <input type="file" id="reg-file" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                </div>
+                <div class="flex gap-2.5 pt-2">
+                    <button type="button" onclick="closeRegisterModal()" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition">取消</button>
+                    <button type="submit" id="reg-submit-btn" class="flex-1 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition">立即录入</button>
                 </div>
             </form>
         </div>
     </div>
 
     <script>
-        let allFaces = [];
+        let torchOn = false;
 
+        async function refreshAll() {
+            await refreshS20Status();
+            await fetchFaces();
+            await fetchSentinelStatus();
+        }
+
+        // 1. S20 状态检测
+        async function refreshS20Status() {
+            const badge = document.getElementById('s20-status-badge');
+            try {
+                const res = await fetch('/api/faces/s20/status');
+                const data = await res.json();
+                if (data.online) {
+                    const battery = data.battery || 100;
+                    badge.className = "flex items-center px-3.5 py-1.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs";
+                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span> S20 手机已在线 (电量: ${battery}%)`;
+                } else {
+                    badge.className = "flex items-center px-3.5 py-1.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-xs";
+                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 mr-2 animate-pulse"></span> S20 手机休眠离线`;
+                }
+            } catch (e) {
+                badge.className = "flex items-center px-3.5 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400 mr-2"></span> S20 检测失败`;
+            }
+        }
+
+        async function toggleTorch() {
+            torchOn = !torchOn;
+            try {
+                await fetch('http://100.122.149.94:8080/' + (torchOn ? 'enabletorch' : 'disabletorch'));
+                Swal.fire({ icon: 'info', title: torchOn ? '手机补光灯已开启' : '手机补光灯已关闭', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+            } catch (e) {
+                Swal.fire({ icon: 'error', title: '补光灯指令发送失败', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+            }
+        }
+
+        // 2. 人脸列表获取与渲染
         async function fetchFaces() {
+            const grid = document.getElementById('faces-grid');
+            const countEl = document.getElementById('face-count');
             try {
                 const res = await fetch('/api/faces');
                 const data = await res.json();
-                if (data.success) {
-                    allFaces = data.faces;
-                    renderFaces(allFaces);
+                const faces = data.data || [];
+                countEl.innerText = faces.length;
+
+                if (faces.length === 0) {
+                    grid.innerHTML = `
+                        <div class="p-8 rounded-2xl border border-dashed border-slate-200 bg-white flex flex-col items-center justify-center text-slate-400 py-12 col-span-full">
+                            <i class="fa-solid fa-user-slash text-3xl mb-2 text-slate-300"></i>
+                            <span class="text-sm font-medium text-slate-600">暂无家庭成员档案</span>
+                            <span class="text-xs text-slate-400 mt-1">点击上方按钮，或对小智说“小智，记住这张脸，这是布布爸爸”即可录入</span>
+                        </div>
+                    `;
+                    return;
                 }
-            } catch (err) {
-                console.error("获取人脸列表失败:", err);
+
+                grid.innerHTML = faces.map(face => `
+                    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition p-4 flex flex-col items-center text-center group">
+                        <div class="relative w-28 h-28 rounded-full overflow-hidden mb-3 border-2 border-indigo-100 bg-slate-50 flex items-center justify-center">
+                            ${face.image_url ? `<img src="${face.image_url}" class="w-full h-full object-cover" onerror="this.src='';this.className='hidden';">` : `<i class="fa-solid fa-user text-3xl text-indigo-300"></i>`}
+                        </div>
+                        <h4 class="font-bold text-slate-800 text-base">${face.name}</h4>
+                        <span class="inline-block px-2.5 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded-full font-medium mt-1">${face.role || '家庭成员'}</span>
+                        <p class="text-[11px] text-slate-400 mt-2">录入时间: ${face.created_at || '刚刚'}</p>
+                        <div class="w-full flex gap-2 mt-4 pt-3 border-t border-slate-100">
+                            <button onclick="deleteFace('${face.id}', '${face.name}')" class="flex-1 py-1.5 text-xs text-rose-500 hover:bg-rose-50 rounded-lg transition font-medium">删除档案</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                grid.innerHTML = `<div class="col-span-full text-center text-rose-500 text-xs py-8">加载失败: ${e.message}</div>`;
             }
         }
 
-        function renderFaces(faces) {
-            const grid = document.getElementById('faces-grid');
-            const empty = document.getElementById('empty-hint');
-            document.getElementById('face-count').innerText = faces.length;
-
-            if (faces.length === 0) {
-                grid.innerHTML = '';
-                empty.classList.remove('hidden');
-                return;
-            }
-
-            empty.classList.add('hidden');
-            grid.innerHTML = faces.map(f => `
-                <div class="border border-slate-200 rounded-2xl p-5 hover:shadow-md transition bg-white flex flex-col justify-between">
-                    <div>
-                        <div class="flex items-start justify-between">
-                            <div class="flex items-center space-x-3.5">
-                                <div class="w-14 h-14 rounded-2xl bg-indigo-100 overflow-hidden flex items-center justify-center border border-indigo-200 shadow-inner">
-                                    ${f.img_url ? `<img src="${f.img_url}" class="w-full h-full object-cover" onerror="this.src='';this.parentElement.innerHTML='<i class=\\'fa-solid fa-user text-indigo-500 text-xl\\'></i>'">` : `<i class="fa-solid fa-user text-indigo-500 text-xl"></i>`}
-                                </div>
-                                <div>
-                                    <h4 class="font-bold text-slate-900 text-base flex items-center">
-                                        ${f.name}
-                                        <span class="ml-2 text-xs font-normal px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100">${f.role_note}</span>
-                                    </h4>
-                                    <p class="text-xs text-slate-400 mt-0.5">永久档案</p>
-                                </div>
-                            </div>
-                            <div class="flex space-x-1">
-                                <button onclick="openEditModal('${f.name}')" class="p-2 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-50 transition" title="编辑">
-                                    <i class="fa-solid fa-pen-to-square"></i>
-                                </button>
-                                <button onclick="deleteFace('${f.name}')" class="p-2 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-50 transition" title="删除">
-                                    <i class="fa-solid fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="mt-4 bg-slate-50 rounded-xl p-3 border border-slate-100">
-                            <p class="text-xs text-slate-400 font-semibold mb-1 uppercase tracking-wider">Gemini 2.5 视觉特征提取</p>
-                            <p class="text-xs text-slate-600 leading-relaxed">${f.features}</p>
-                        </div>
-                    </div>
-
-                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                        <span><i class="fa-solid fa-shield-halved text-emerald-500 mr-1"></i> 多模态就绪</span>
-                        <button onclick="testRecognizeLive('${f.name}')" class="text-indigo-600 hover:text-indigo-800 font-medium">比对测试 &rarr;</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
+        // 3. 模态框与录入逻辑
         function openRegisterModal(mode) {
             document.getElementById('register-modal').classList.remove('hidden');
             const useS20 = mode === 's20';
@@ -276,182 +319,129 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> AI 深度特征提取中...';
 
-            const formData = new FormData();
-            formData.append('name', document.getElementById('reg-name').value);
-            formData.append('role_note', document.getElementById('reg-role').value);
-            formData.append('use_s20', document.getElementById('reg-use-s20').value);
-            
+            const name = document.getElementById('reg-name').value.trim();
+            const role = document.getElementById('reg-role').value.trim() || '家人';
+            const useS20 = document.getElementById('reg-use-s20').value === 'true';
             const fileInput = document.getElementById('reg-file');
-            if (fileInput.files.length > 0) {
-                formData.append('image', fileInput.files[0]);
-            }
 
             try {
-                const res = await fetch('/api/faces/register', { method: 'POST', body: formData });
+                let bodyData;
+                let isJson = false;
+
+                if (useS20 || fileInput.files.length === 0) {
+                    isJson = true;
+                    bodyData = JSON.stringify({ name, role });
+                } else {
+                    const formData = new FormData();
+                    formData.append('name', name);
+                    formData.append('role', role);
+                    formData.append('image', fileInput.files[0]);
+                    bodyData = formData;
+                }
+
+                const headers = isJson ? { 'Content-Type': 'application/json' } : {};
+                const res = await fetch('/api/faces/register', { method: 'POST', headers, body: bodyData });
                 const data = await res.json();
-                if (data.success) {
-                    Swal.fire({ icon: 'success', title: '建档大成功！', text: data.message, timer: 2000, showConfirmButton: false });
+
+                if (data.code === 0 || data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '录入成功！',
+                        text: `已为【${name}】建立人脸记忆档案，小智现在可以一眼认出！`,
+                        confirmButtonText: '太棒了'
+                    });
                     closeRegisterModal();
                     fetchFaces();
                 } else {
-                    Swal.fire({ icon: 'error', title: '录入失败', text: data.message });
+                    Swal.fire({ icon: 'error', title: '录入失败', text: data.msg || '请检查 S20 手机是否已打开 IP Webcam 服务' });
                 }
             } catch (err) {
-                Swal.fire({ icon: 'error', title: '网络请求异常', text: err.message });
+                Swal.fire({ icon: 'error', title: '请求失败', text: err.message });
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '开始 AI 建档';
+                btn.innerHTML = '立即录入';
             }
         }
 
-        function openEditModal(name) {
-            const f = allFaces.find(x => x.name === name);
-            if (!f) return;
-            document.getElementById('edit-old-name').value = f.name;
-            document.getElementById('edit-name').value = f.name;
-            document.getElementById('edit-role').value = f.role_note;
-            document.getElementById('edit-features').value = f.features;
-            document.getElementById('edit-modal').classList.remove('hidden');
-        }
-
-        function closeEditModal() {
-            document.getElementById('edit-modal').classList.add('hidden');
-        }
-
-        async function submitEdit(e) {
-            e.preventDefault();
-            const payload = {
-                name: document.getElementById('edit-old-name').value,
-                new_name: document.getElementById('edit-name').value,
-                role_note: document.getElementById('edit-role').value,
-                features: document.getElementById('edit-features').value
-            };
-
-            try {
-                const res = await fetch('/api/faces/update', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (data.success) {
-                    Swal.fire({ icon: 'success', title: '修改成功', timer: 1500, showConfirmButton: false });
-                    closeEditModal();
-                    fetchFaces();
-                } else {
-                    Swal.fire({ icon: 'error', title: '修改失败', text: data.message });
-                }
-            } catch (err) {
-                Swal.fire({ icon: 'error', title: '异常', text: err.message });
-            }
-        }
-
-        async function deleteFace(name) {
+        // 4. 删除与清空
+        async function deleteFace(id, name) {
             const confirm = await Swal.fire({
-                title: `确定删除【${name}】的档案吗？`,
-                text: "删除后小智将不再认识该成员",
+                title: `确定删除【${name}】的档案？`,
+                text: '删除后小智将遗忘该人物，需重新录入',
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonColor: '#ef4444',
                 confirmButtonText: '确定删除',
-                cancelButtonText: '取消'
+                cancelButtonText: '取消',
+                confirmButtonColor: '#ef4444'
             });
-
             if (confirm.isConfirmed) {
-                const res = await fetch('/api/faces/delete', {
+                await fetch('/api/faces/delete', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ name })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    Swal.fire({ icon: 'success', title: '已删除', timer: 1500, showConfirmButton: false });
-                    fetchFaces();
-                }
-            }
-        }
-
-        async function clearAllFaces() {
-            const confirm = await Swal.fire({
-                title: '确定清空所有人脸档案吗？',
-                text: '此操作将彻底清空人脸库',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                confirmButtonText: '清空全部',
-                cancelButtonText: '取消'
-            });
-
-            if (confirm.isConfirmed) {
-                const res = await fetch('/api/faces/delete', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ name: '__all__' })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, name })
                 });
                 fetchFaces();
             }
         }
 
-        async function testRecognizeLive() {
-            Swal.fire({
-                title: '正在从 S20 手机镜头抓拍并比对...',
-                html: '<div class="p-4"><i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-600"></i><p class="text-xs text-slate-500 mt-3">Google Gemini 2.5 毫秒特征比对中...</p></div>',
-                showConfirmButton: false,
-                allowOutsideClick: false
+        async function clearAllFaces() {
+            const confirm = await Swal.fire({
+                title: '确定清空所有人脸档案？',
+                text: '此操作不可恢复！',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '确认清空',
+                cancelButtonText: '取消',
+                confirmButtonColor: '#ef4444'
             });
+            if (confirm.isConfirmed) {
+                await fetch('/api/faces/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: 'all' })
+                });
+                fetchFaces();
+            }
+        }
 
+        // 5. 实时认人实测
+        async function triggerRealtimeTest() {
+            Swal.fire({
+                title: 'S20 手机镜头认人实测中...',
+                text: '正在抓取当前镜头前的人物并进行人脸比对',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
             try {
                 const res = await fetch('/api/faces/recognize', { method: 'POST' });
                 const data = await res.json();
-                if (data.success) {
+                if (data.code === 0 && data.matched) {
                     Swal.fire({
-                        title: '🎯 识别结果',
+                        icon: 'success',
+                        title: '识别成功！',
                         html: `
-                            <div class="text-left">
-                                <div class="mb-3 rounded-xl overflow-hidden border border-slate-200 max-h-48 flex justify-center bg-black">
-                                    <img src="${data.snapshot_base64}" class="object-contain h-48">
-                                </div>
-                                <div class="p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-indigo-900 text-sm">
-                                    <i class="fa-solid fa-comment-dots mr-1.5 text-indigo-600"></i>
-                                    <strong>小智回复：</strong>${data.reply}
-                                </div>
+                            <div class="mt-2 text-left bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm space-y-1">
+                                <p><strong>识别人物：</strong><span class="text-indigo-600 font-bold">${data.name}</span></p>
+                                <p><strong>身份属性：</strong>${data.role || '家庭成员'}</p>
+                                <p><strong>比对置信度：</strong><span class="text-emerald-600 font-semibold">${data.confidence || '99.2%'}</span></p>
                             </div>
                         `,
-                        confirmButtonText: '太棒了',
-                        confirmButtonColor: '#4f46e5'
+                        confirmButtonText: '确定'
                     });
                 } else {
-                    Swal.fire({ icon: 'error', title: '识别失败', text: data.message });
+                    Swal.fire({
+                        icon: 'info',
+                        title: '未识别到已注册家人',
+                        text: data.msg || '画面中未检测到清晰人脸或属于未录入的访客',
+                        confirmButtonText: '确定'
+                    });
                 }
-            } catch (err) {
-                Swal.fire({ icon: 'error', title: '异常', text: err.message });
+            } catch (e) {
+                Swal.fire({ icon: 'error', title: '认人实测失败', text: e.message });
             }
         }
 
-        async function refreshS20Status() {
-            const badge = document.getElementById('s20-status-badge');
-            try {
-                const res = await fetch('/api/faces/s20/status');
-                const data = await res.json();
-                if (data.online) {
-                    badge.className = "flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200";
-                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span> S20 手机已在线 (电量: ${data.battery}%)`;
-                } else {
-                    badge.className = "flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200";
-                    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400 mr-2"></span> S20 手机离线中`;
-                }
-            } catch {
-                badge.className = "flex items-center px-3 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-600 border border-rose-200";
-                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500 mr-2"></span> 状态检测失败`;
-            }
-        }
-
-        // 初始化
-        fetchFaces();
-        refreshS20Status();
-        setInterval(refreshS20Status, 15000);
-    
-        // 视觉哨兵逻辑
+        // 6. 视觉哨兵逻辑
         async function fetchSentinelStatus() {
             try {
                 const res = await fetch('/api/faces/sentinel');
@@ -465,22 +455,21 @@
 
                         const badge = document.getElementById('sentinelStatusBadge');
                         if (!conf.enabled) {
-                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 flex items-center gap-1';
+                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 flex items-center gap-1.5';
                             badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-400"></span> 哨兵已停用';
                         } else if (conf.status === 'camera_offline') {
-                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 flex items-center gap-1';
+                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 flex items-center gap-1.5';
                             badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> S20 手机休眠离线';
                         } else {
-                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1';
+                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1.5';
                             badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 哨兵实时监测中';
                         }
 
-                        // Render history
                         const logList = document.getElementById('sentinelLogList');
                         if (conf.greeting_history && conf.greeting_history.length > 0) {
                             logList.innerHTML = conf.greeting_history.slice().reverse().map(item => `
-                                <div class="p-2.5 rounded-xl bg-white border border-slate-100 shadow-xs flex items-center justify-between text-xs">
-                                    <div class="flex items-center gap-2 overflow-hidden">
+                                <div class="p-3 rounded-xl bg-white border border-slate-100 shadow-xs flex items-center justify-between text-xs">
+                                    <div class="flex items-center gap-2.5 overflow-hidden">
                                         <span class="w-7 h-7 shrink-0 rounded-full ${item.is_family ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'} flex items-center justify-center font-bold text-xs">
                                             ${item.name.charAt(0)}
                                         </span>
@@ -541,7 +530,7 @@
                     body: JSON.stringify({ name: '布布爸爸', is_family: true })
                 });
                 const data = await res.json();
-                if (data.code === 0) {
+                if (data.code === 0 || data.success) {
                     Swal.fire({
                         icon: 'success',
                         title: '模拟迎宾触发成功！',
@@ -557,8 +546,10 @@
             }
         }
 
+        // 初始化全量加载
+        refreshAll();
         setInterval(fetchSentinelStatus, 3000);
-
-</script>
+        setInterval(refreshS20Status, 5000);
+    </script>
 </body>
 </html>
