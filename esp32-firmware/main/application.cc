@@ -262,8 +262,11 @@ void Application::Run() {
             auto display = Board::GetInstance().GetDisplay();
             display->UpdateStatusBar();
 
-            // Print debug info every 10 seconds
+            // Print debug info and send heartbeat ping every 10 seconds
             if (clock_ticks_ % 10 == 0) {
+                if (protocol_ && protocol_->IsAudioChannelOpened()) {
+                    protocol_->SendText("{\"type\":\"ping\"}");
+                }
                 SystemInfo::PrintHeapStats();
                 // SystemInfo::PrintTaskList();
                 // SystemInfo::PrintTaskCpuUsage(pdMS_TO_TICKS(1000));

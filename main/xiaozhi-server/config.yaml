@@ -72,7 +72,7 @@ enable_stop_tts_notify: false
 # 说完话是否开启提示音，音效地址
 stop_tts_notify_voice: "config/assets/tts_notify.mp3"
 # 是否启用WebSocket心跳保活机制
-enable_websocket_ping: false
+enable_websocket_ping: true
 
 
 # TTS音频发送延迟配置

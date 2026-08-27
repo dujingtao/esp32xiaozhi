@@ -122,8 +122,11 @@ void WebsocketProtocol::ScheduleReconnect() {
 }
 
 bool WebsocketProtocol::ConnectWebSocket(bool report_error) {
-    if (websocket_ != nullptr && websocket_->IsConnected()) {
-        return true;
+    if (websocket_ != nullptr) {
+        if (websocket_->IsConnected()) {
+            return true;
+        }
+        websocket_.reset();
     }
 
     Settings settings("websocket", false);
