@@ -1,19 +1,19 @@
 import os
 import json
 import base64
-import urllib.request
 import requests
+import urllib.request
+import urllib.error
 from typing import Dict, Any, List
-from plugins_func.register import register_function, ToolType, ActionResponse, Action
 from config.logger import setup_logging
+from plugins_func.register import register_function, ToolType, ActionResponse, Action
 
 TAG = __name__
 logger = setup_logging()
 
-# S20 手机摄像头 Tailscale 专属直连地址
 S20_HOST = "http://100.122.149.94:8080"
-GEMINI_API_KEY = "AIzaSyA1z-1pIt1lNM-NRjOmxZtXZ5yN5sR01-w"
 ZHIPU_API_KEY = "fd04fb160360497291b1ae87596dbde9.ID3C9TfZTgTd3W9h"
+GEMINI_API_KEY = "AIzaSyA1z-1pIt1lNM-NRjOmxZtXZ5yN5sR01-w"
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 FACES_DB_FILE = os.path.join(DATA_DIR, "family_faces.json")
@@ -21,120 +21,136 @@ FACES_IMG_DIR = os.path.join(DATA_DIR, "faces")
 
 os.makedirs(FACES_IMG_DIR, exist_ok=True)
 
-def load_faces_db() -> Dict[str, Any]:
-    """读取已注册的家庭成员人脸数据库"""
+def load_faces_list() -> List[Dict[str, Any]]:
+    """读取已注册的家庭成员人脸数据库，返回列表"""
     if os.path.exists(FACES_DB_FILE):
         try:
             with open(FACES_DB_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                if isinstance(data, list):
+                    return data
+                elif isinstance(data, dict):
+                    return list(data.values())
         except Exception as e:
             logger.bind(tag=TAG).error(f"读取人脸数据库失败: {e}")
-    return {}
+    return []
 
-def save_faces_db(db: Dict[str, Any]):
-    """保存家庭成员人脸数据库"""
+def save_faces_list(faces: List[Dict[str, Any]]):
+    """保存家庭成员人脸数据库为列表格式"""
     try:
+        os.makedirs(os.path.dirname(FACES_DB_FILE), exist_ok=True)
         with open(FACES_DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(db, f, ensure_ascii=False, indent=2)
+            json.dump(faces, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logger.bind(tag=TAG).error(f"保存人脸数据库失败: {e}")
 
 def capture_s20_frame() -> bytes:
-    """从三星 S20 抓拍高清单帧画面"""
-    endpoints = ["/shot.jpg", "/photo.jpg", "/photoaf.jpg"]
-    for ep in endpoints:
+    """从三星S20手机抓取最新一帧图片"""
+    url = f"{S20_HOST}/shot.jpg"
+    try:
+        resp = requests.get(url, timeout=3.0)
+        if resp.status_code == 200:
+            return resp.content
+    except Exception as e:
+        logger.bind(tag=TAG).warning(f"从S20抓取画面失败: {e}")
+    return None
+
+def analyze_vlm_dual(image_base64: str, prompt: str, max_tokens: int = 300) -> str:
+    """双引擎VLM分析：优先 智谱 GLM-4V-Flash，Google Gemini 2.5 Flash 兜底"""
+    # 1. 优先：智谱 GLM-4V-Flash (极速多模态大模型)
+    if ZHIPU_API_KEY:
         try:
-            url = f"{S20_HOST}{ep}"
-            req = urllib.request.Request(url, headers={"User-Agent": "XiaoZhi-Face/1.0"})
-            with urllib.request.urlopen(req, timeout=4) as resp:
-                data = resp.read()
-                if len(data) > 1000:
-                    return data
-        except Exception as e:
-            logger.bind(tag=TAG).warning(f"从 {ep} 抓取 S20 画面失败: {e}")
-    return None
-
-def analyze_vlm_dual(b64_img, prompt_text, max_tokens=300):
-    """双引擎执行视觉分析：首选 Gemini 2.5 Flash，自动降级至 智谱 GLM-4V-Flash"""
-    # 1. 尝试 Google Gemini 2.5 Flash
-    try:
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": prompt_text},
-                        {
-                            "inline_data": {
-                                "mime_type": "image/jpeg",
-                                "data": b64_img
+            url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+            payload = {
+                "model": "glm-4v-flash",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_base64}"
+                                }
                             }
-                        }
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "maxOutputTokens": max_tokens,
-                "temperature": 0.4
+                        ]
+                    }
+                ],
+                "temperature": 0.3,
+                "max_tokens": max_tokens
             }
-        }
-        r = requests.post(gemini_url, json=payload, timeout=8)
-        if r.status_code == 200:
-            res = r.json()
-            reply = res["candidates"][0]["content"]["parts"][0]["text"].strip()
-            logger.bind(tag=TAG).info(f"Gemini 人脸/视觉分析成功: {reply[:60]}...")
-            return reply
-    except Exception as e:
-        logger.bind(tag=TAG).warning(f"Gemini 异常 {e}，使用智谱备用")
-
-    # 2. 备用引擎：智谱 GLM-4V-Flash
-    try:
-        zhipu_url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-        headers = {"Authorization": f"Bearer {ZHIPU_API_KEY}", "Content-Type": "application/json"}
-        payload = {
-            "model": "glm-4v-flash",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt_text},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
-                    ]
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {ZHIPU_API_KEY}"
                 }
-            ],
-            "max_tokens": max_tokens,
-            "temperature": 0.4
-        }
-        r = requests.post(zhipu_url, headers=headers, json=payload, timeout=8)
-        if r.status_code == 200:
-            reply = r.json()["choices"][0]["message"]["content"].strip()
-            logger.bind(tag=TAG).info(f"智谱 人脸/视觉分析成功: {reply[:60]}...")
-            return reply
-    except Exception as e:
-        logger.bind(tag=TAG).error(f"智谱备用引擎异常: {e}")
+            )
+            with urllib.request.urlopen(req, timeout=8) as response:
+                if response.status == 200:
+                    res_json = json.loads(response.read().decode("utf-8"))
+                    text = res_json["choices"][0]["message"]["content"].strip()
+                    logger.bind(tag=TAG).info(f"智谱 GLM-4V-Flash 视觉识别成功: {text[:60]}...")
+                    return text
+        except Exception as e:
+            logger.bind(tag=TAG).warning(f"智谱 GLM-4V-Flash 调用失败，尝试备用引擎: {e}")
+
+    # 2. 备用：Google Gemini 2.5 Flash
+    if GEMINI_API_KEY:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {"text": prompt},
+                            {
+                                "inline_data": {
+                                    "mime_type": "image/jpeg",
+                                    "data": image_base64
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.3,
+                    "maxOutputTokens": max_tokens
+                }
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=8) as response:
+                if response.status == 200:
+                    res_json = json.loads(response.read().decode("utf-8"))
+                    text = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    logger.bind(tag=TAG).info(f"Gemini 2.5 Flash 视觉识别成功: {text[:60]}...")
+                    return text
+        except Exception as e:
+            logger.bind(tag=TAG).error(f"Gemini 2.5 Flash 调用也失败: {e}")
 
     return None
-
-# --- 工具定义 ---
 
 register_face_desc = {
     "type": "function",
     "function": {
         "name": "register_family_face",
-        "description": (
-            "【人脸录入/记住家庭成员】当用户要求小智记住人脸、录入人脸或说'小智，记住这张脸，这是xxx'、'帮我录入人脸，我是xxx'时，必须调用此工具。"
-            "该工具会立即调用三星 S20 高清摄像头抓拍眼前的人物正脸，提取外貌特征并保存到家庭成员人脸库中。"
-        ),
+        "description": "通过三星S20手机摄像头拍照并录入家庭成员人脸档案。当用户说'记住这张脸，这是xxx'、'帮我认识一下xxx'、'录入人脸'时调用此工具。",
         "parameters": {
             "type": "object",
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "要记住的人物称呼或姓名，例如：'布布爸爸'、'布布奶奶'、'布布'、'妈妈'"
+                    "description": "家庭成员的姓名或称呼，如'布布爸爸'、'妈妈'、'奶奶'、'布布'等"
                 },
                 "role_note": {
                     "type": "string",
-                    "description": "可选的身份或角色备注，例如：'家庭成员'、'父亲'、'奶奶'等"
+                    "description": "身份或角色备注，如'家庭成员'、'父亲'、'孩子'等，默认为'家庭成员'"
                 }
             },
             "required": ["name"]
@@ -146,16 +162,13 @@ recognize_face_desc = {
     "type": "function",
     "function": {
         "name": "recognize_family_face",
-        "description": (
-            "【人脸识别/认人】当用户询问'看看我是谁'、'看看前面是谁'、'认认这个人是谁'、'看看谁在镜头前'时，必须调用此工具。"
-            "该工具会调用三星 S20 摄像头抓拍画面，比对家庭成员人脸库，精准识别人物身份并直接亲切回复问候。"
-        ),
+        "description": "通过三星S20手机摄像头看眼前的人物并识别人脸。当用户询问'看看我是谁'、'你认得我吗'、'镜头前是谁'、'看看眼前是谁'、'看到我吗'时必须调用此工具！",
         "parameters": {
             "type": "object",
             "properties": {
                 "question": {
                     "type": "string",
-                    "description": "用户的问询具体内容，如'看看我是谁'、'看看站在前面的是谁'"
+                    "description": "用户的具体问题，如'看看我是谁'或'你认得我吗'"
                 }
             },
             "required": ["question"]
@@ -167,7 +180,7 @@ list_faces_desc = {
     "type": "function",
     "function": {
         "name": "list_family_faces",
-        "description": "查询小智当前已认识/已录入的所有家庭成员人脸名单。当用户询问'你现在认识家里哪些人'、'人脸库里有谁'时调用。",
+        "description": "列出小智当前已记住和认识的所有家庭成员人脸档案列表。当用户询问'你认识谁'、'你记住了哪些人'、'人脸库里有谁'时调用。",
         "parameters": {
             "type": "object",
             "properties": {}
@@ -213,7 +226,7 @@ def register_family_face(*args, **kwargs):
         b64_img = base64.b64encode(img_bytes).decode("utf-8")
         
         # 保存图片副本
-        img_filename = f"{name}.jpg"
+        img_filename = f"face_{int(os.times().elapsed*1000)}_{name}.jpg"
         img_path = os.path.join(FACES_IMG_DIR, img_filename)
         with open(img_path, "wb") as f:
             f.write(img_bytes)
@@ -229,14 +242,30 @@ def register_family_face(*args, **kwargs):
             if "NO_FACE" in feature_desc:
                 return ActionResponse(action=Action.RESPONSE, response=f"没有在镜头前看清正脸哦，请正对手机镜头并保持光线明亮，再对我说一次'记住这是{name}'吧！")
                 
-            db = load_faces_db()
-            db[name] = {
-                "name": name,
-                "role_note": role_note,
-                "features": feature_desc,
-                "img_file": img_filename
-            }
-            save_faces_db(db)
+            faces = load_faces_list()
+            now_str = os.popen("date '+%Y-%m-%d %H:%M:%S'").read().strip()
+            updated = False
+            for item in faces:
+                if item.get("name") == name:
+                    item["role"] = role_note
+                    item["role_note"] = role_note
+                    item["features"] = feature_desc
+                    item["image_url"] = f"/api/faces/image/{img_filename}"
+                    item["updated_at"] = now_str
+                    updated = True
+                    break
+            if not updated:
+                faces.append({
+                    "id": f"face_{int(os.times().elapsed*1000)}",
+                    "name": name,
+                    "role": role_note,
+                    "role_note": role_note,
+                    "features": feature_desc,
+                    "image_url": f"/api/faces/image/{img_filename}",
+                    "created_at": now_str,
+                    "updated_at": now_str
+                })
+            save_faces_list(faces)
             logger.bind(tag=TAG).info(f"人脸建档成功: {name}, 特征: {feature_desc}")
             
             return ActionResponse(
@@ -264,12 +293,15 @@ def recognize_family_face(*args, **kwargs):
             
         b64_img = base64.b64encode(img_bytes).decode("utf-8")
         
-        db = load_faces_db()
+        faces = load_faces_list()
         profiles_text = ""
-        if db:
+        if faces:
             profiles_text = "【已知已注册的家庭成员档案库】：\n"
-            for k, v in db.items():
-                profiles_text += f"- 姓名/称呼: {v.get('name')}, 身份: {v.get('role_note')}, 外貌特征: {v.get('features')}\n"
+            for v in faces:
+                name = v.get("name", "")
+                role = v.get("role") or v.get("role_note") or "家庭成员"
+                feat = v.get("features", "家庭主要成员")
+                profiles_text += f"- 姓名/称呼: {name}, 身份: {role}, 档案特征: {feat}\n"
         else:
             profiles_text = "【已知家庭成员档案库】：目前尚未录入任何家庭成员档案。"
             
@@ -279,7 +311,7 @@ def recognize_family_face(*args, **kwargs):
             f"{profiles_text}\n"
             "【任务要求】：\n"
             "1. 仔细观察画面中的人物面部、外貌特征、发型、眼镜与穿着，与档案库中的家庭成员进行严谨比对；\n"
-            "2. 如果确认是档案库中的某位家庭成员，请用非常亲切、自然、喜悦的口吻直接叫出对方的称呼并打招呼（例如：'布布爸爸，看到你啦！你今天精神很不错嘛~'）；\n"
+            "2. 如果确认是档案库中的家庭成员（如布布爸爸），请用非常亲切、自然、喜悦的口吻直接叫出对方的称呼并打招呼（例如：'布布爸爸，看到你啦！晚上好呀~'）；\n"
             "3. 如果画面中没有匹配到已知成员，或者是一位新朋友，请亲切地描述看到的人物外观，并友好地提醒：'眼前是一位我不认识的朋友哦，如果需要我认识您，可以对我说【记住这张脸，这是xxx】来录入档案哦~'；\n"
             "4. 如果画面中没有人脸或太暗，请友好提醒正对镜头或开灯。"
             f"用户问题：{question}。回答语言必须口语化、温暖生动，禁止使用机械式死板开头。"
@@ -297,13 +329,13 @@ def recognize_family_face(*args, **kwargs):
 
 @register_function("list_family_faces", list_faces_desc, ToolType.WAIT)
 def list_family_faces(*args, **kwargs):
-    db = load_faces_db()
-    if not db:
+    faces = load_faces_list()
+    if not faces:
         return ActionResponse(
             action=Action.RESPONSE,
             response="我的人脸档案库目前还是空的呢。您可以正对手机镜头对我说‘记住这张脸，这是xxx’来帮我认识家人们哦！"
         )
-    names = list(db.keys())
+    names = [f.get("name") for f in faces if f.get("name")]
     return ActionResponse(
         action=Action.RESPONSE,
         response=f"我目前已经认识的家庭成员有：{ '、'.join(names) }。随时欢迎带更多家人来让我认识哦！"
@@ -316,23 +348,18 @@ def delete_family_face(*args, **kwargs):
         if isinstance(args[0], str):
             name = args[0]
             
-    db = load_faces_db()
-    if not db:
+    faces = load_faces_list()
+    if not faces:
         return ActionResponse(action=Action.RESPONSE, response="人脸库本来就是空的，无需删除。")
         
     if "全部" in name or "所有" in name or name == "all":
-        save_faces_db({})
+        save_faces_list([])
         return ActionResponse(action=Action.RESPONSE, response="已成功清空所有家庭成员的人脸档案。")
         
-    matched = None
-    for k in db.keys():
-        if name in k or k in name:
-            matched = k
-            break
-            
-    if matched:
-        del db[matched]
-        save_faces_db(db)
-        return ActionResponse(action=Action.RESPONSE, response=f"已成功删除【{matched}】的人脸档案。")
+    initial_len = len(faces)
+    faces = [f for f in faces if name not in f.get("name", "") and f.get("name", "") not in name]
+    if len(faces) < initial_len:
+        save_faces_list(faces)
+        return ActionResponse(action=Action.RESPONSE, response=f"已成功删除【{name}】的人脸档案。")
     else:
         return ActionResponse(action=Action.RESPONSE, response=f"在人脸库中没有找到名为【{name}】的成员档案。")
