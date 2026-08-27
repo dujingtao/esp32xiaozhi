@@ -46,10 +46,11 @@ class FaceSentinel:
         self.config = {
             "enabled": True,
             "camera_url": "http://100.122.149.94:8080/shot.jpg",
-            "check_interval": 2.0,
+            "check_interval": 3.0,
             "cooldown_minutes": 10,
             "wechat_notify": True,
             "greet_stranger": True,
+            "last_global_greeting_time": 0,
             "last_seen": {},
             "greeting_history": []
         }
@@ -95,7 +96,7 @@ class FaceSentinel:
             "enabled": self.config.get("enabled", True),
             "status": self.status,
             "camera_url": self.config.get("camera_url"),
-            "check_interval": self.config.get("check_interval", 2.0),
+            "check_interval": self.config.get("check_interval", 3.0),
             "cooldown_minutes": self.config.get("cooldown_minutes", 10),
             "wechat_notify": self.config.get("wechat_notify", True),
             "greet_stranger": self.config.get("greet_stranger", True),
@@ -114,7 +115,7 @@ class FaceSentinel:
         url = self.config.get("camera_url", "http://100.122.149.94:8080/shot.jpg")
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=1.5) as resp:
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
                 if resp.status == 200:
                     img_bytes = resp.read()
                     nparr = np.frombuffer(img_bytes, np.uint8)
@@ -132,9 +133,9 @@ class FaceSentinel:
             small_gray = cv2.resize(gray, (0, 0), fx=0.5, fy=0.5)
             faces = self.face_cascade.detectMultiScale(
                 small_gray,
-                scaleFactor=1.1,
-                minNeighbors=4,
-                minSize=(30, 30)
+                scaleFactor=1.15,
+                minNeighbors=5,
+                minSize=(40, 40)
             )
             return [(x*2, y*2, w*2, h*2) for (x, y, w, h) in faces]
         except Exception:
@@ -146,17 +147,15 @@ class FaceSentinel:
             try:
                 with open(FAMILY_FACES_PATH, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    if isinstance(data, list):
-                        family_members = data
-                    elif isinstance(data, dict):
-                        family_members = list(data.values())
+                    if isinstance(data, list): family_members = data
+                    elif isinstance(data, dict): family_members = list(data.values())
             except Exception:
                 pass
 
         if not family_members:
             return "访客朋友", False
 
-        name = family_members[0].get("name", "布布爸爸") if isinstance(family_members[0], dict) else "布布爸爸"
+        name = family_members[0].get("name", "布布爸爸")
         return name, True
 
     def _generate_greeting(self, name: str, is_family: bool):
@@ -238,7 +237,7 @@ class FaceSentinel:
 
     def _run_loop(self):
         while True:
-            time.sleep(self.config.get("check_interval", 2.0))
+            time.sleep(self.config.get("check_interval", 3.0))
             if not self.config.get("enabled", True):
                 self.status = "paused"
                 continue
@@ -252,16 +251,19 @@ class FaceSentinel:
             self.status = "monitoring"
             faces = self._detect_faces(frame)
             if len(faces) > 0:
+                cooldown_sec = self.config.get("cooldown_minutes", 10) * 60
+                now_ts = time.time()
+                last_global = self.config.get("last_global_greeting_time", 0)
+
+                # 全局防骚扰冷却：在 cooldown 周期内（默认10分钟），不重复播报迎宾
+                if now_ts - last_global < cooldown_sec:
+                    continue
+
                 person_name, is_family = self._recognize_person(frame, img_bytes)
                 if not is_family and not self.config.get("greet_stranger", True):
                     continue
 
-                cooldown_sec = self.config.get("cooldown_minutes", 10) * 60
-                last_seen_dict = self.config.setdefault("last_seen", {})
-                last_time = last_seen_dict.get(person_name, 0)
-                now_ts = time.time()
-
-                if now_ts - last_time >= cooldown_sec:
-                    print(f"{TAG} Face triggered: {person_name}, executing greeting!")
-                    last_seen_dict[person_name] = now_ts
-                    self.trigger_greeting(person_name, is_family)
+                print(f"{TAG} Face triggered: {person_name}, executing greeting with cooldown {cooldown_sec}s!")
+                self.config["last_global_greeting_time"] = now_ts
+                self.save_config()
+                self.trigger_greeting(person_name, is_family)
