@@ -1063,9 +1063,9 @@ class ConnectionHandler:
             self.logger.bind(tag=TAG).info(f"主动唤醒并开启对话: {proactive_prompt}")
             self.last_activity_time = time.time() * 1000
             
-            # 使用现有的完整对话与TTS框架直接驱动设备播报与自动开麦
-            if hasattr(self, 'loop') and self.loop and self.loop.is_running():
-                self.loop.call_soon_threadsafe(self.chat, proactive_prompt)
+            # 必须使用 executor 线程池运行 chat，避免阻塞 asyncio 事件循环导致 run_coroutine_threadsafe 死锁
+            if hasattr(self, 'executor') and self.executor:
+                self.executor.submit(self.chat, proactive_prompt)
             else:
                 self.chat(proactive_prompt)
             return True

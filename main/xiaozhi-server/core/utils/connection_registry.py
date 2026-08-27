@@ -40,8 +40,8 @@ class ConnectionRegistry:
                     success = True
                 elif hasattr(handler, 'chat'):
                     print(f"{TAG} Falling back to chat on device {getattr(handler, 'device_id', 'unknown')}...")
-                    if hasattr(handler, 'loop') and handler.loop and handler.loop.is_running():
-                        handler.loop.call_soon_threadsafe(handler.chat, prompt)
+                    if hasattr(handler, 'executor') and handler.executor:
+                        handler.executor.submit(handler.chat, prompt)
                     else:
                         handler.chat(prompt)
                     success = True
