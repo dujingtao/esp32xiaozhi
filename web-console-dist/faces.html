@@ -57,7 +57,7 @@
                         <div class="flex items-center gap-2">
                             <h2 class="text-lg font-bold text-slate-900">🤖 主动视觉哨兵与走近迎宾系统</h2>
                             <span id="sentinelStatusBadge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1.5">
-                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 哨兵监测中
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 哨兵实时监测中
                             </span>
                         </div>
                         <p class="text-xs text-slate-500 mt-1">S20 镜头自动捕捉进入画面的家人与访客，秒级识人并由小智音箱主动开麦迎宾</p>
@@ -103,7 +103,7 @@
                             <span class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">布</span>
                             <div>
                                 <span class="font-bold text-slate-800">布布爸爸</span>
-                                <span class="text-[11px] text-slate-500 ml-1">“布布爸爸，下午好呀！今天工作辛苦啦...”</span>
+                                <span class="text-[11px] text-slate-500 ml-1">“布布爸爸，晚上好！夜深了，注意保护眼睛早点休息哦！”</span>
                             </div>
                         </div>
                         <span class="text-[11px] text-slate-400">刚刚</span>
@@ -118,7 +118,7 @@
             <div class="glass-card p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                 <div>
                     <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">已录入家庭成员</p>
-                    <h3 id="face-count" class="text-3xl font-bold text-slate-800 mt-2">0</h3>
+                    <h3 id="face-count" class="text-3xl font-bold text-slate-800 mt-2">1</h3>
                     <p class="text-xs text-slate-500 mt-1">支持语音与网页双向实时同步</p>
                 </div>
                 <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">
@@ -168,7 +168,7 @@
                     </div>
                     <div>
                         <h2 class="text-base font-bold text-slate-800">家庭成员人脸档案库</h2>
-                        <p class="text-xs text-slate-500">已由 Google Gemini 2.5 Flash 提取特征并永久保存</p>
+                        <p class="text-xs text-slate-500">已由多模态大模型提取特征并永久保存</p>
                     </div>
                 </div>
                 <button onclick="clearAllFaces()" class="text-xs text-rose-500 hover:text-rose-700 px-3 py-1.5 rounded-lg hover:bg-rose-50 transition border border-rose-100 flex items-center gap-1">
@@ -234,6 +234,7 @@
             const badge = document.getElementById('s20-status-badge');
             try {
                 const res = await fetch('/api/faces/s20/status');
+                if (!res.ok) return;
                 const data = await res.json();
                 if (data.online) {
                     const battery = data.battery || 100;
@@ -244,8 +245,7 @@
                     badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 mr-2 animate-pulse"></span> S20 手机休眠离线`;
                 }
             } catch (e) {
-                badge.className = "flex items-center px-3.5 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200";
-                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400 mr-2"></span> S20 检测失败`;
+                // Keep last state if brief network blip
             }
         }
 
@@ -265,6 +265,7 @@
             const countEl = document.getElementById('face-count');
             try {
                 const res = await fetch('/api/faces');
+                if (!res.ok) return;
                 const data = await res.json();
                 const faces = data.data || [];
                 countEl.innerText = faces.length;
@@ -282,11 +283,11 @@
 
                 grid.innerHTML = faces.map(face => `
                     <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition p-4 flex flex-col items-center text-center group">
-                        <div class="relative w-28 h-28 rounded-full overflow-hidden mb-3 border-2 border-indigo-100 bg-slate-50 flex items-center justify-center">
+                        <div class="relative w-28 h-28 rounded-full overflow-hidden mb-3 border-2 border-indigo-100 bg-slate-50 flex items-center justify-center shadow-xs">
                             ${face.image_url ? `<img src="${face.image_url}" class="w-full h-full object-cover" onerror="this.src='';this.className='hidden';">` : `<i class="fa-solid fa-user text-3xl text-indigo-300"></i>`}
                         </div>
                         <h4 class="font-bold text-slate-800 text-base">${face.name}</h4>
-                        <span class="inline-block px-2.5 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded-full font-medium mt-1">${face.role || '家庭成员'}</span>
+                        <span class="inline-block px-2.5 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded-full font-medium mt-1">${face.role || face.role_note || '家庭成员'}</span>
                         <p class="text-[11px] text-slate-400 mt-2">录入时间: ${face.created_at || '刚刚'}</p>
                         <div class="w-full flex gap-2 mt-4 pt-3 border-t border-slate-100">
                             <button onclick="deleteFace('${face.id}', '${face.name}')" class="flex-1 py-1.5 text-xs text-rose-500 hover:bg-rose-50 rounded-lg transition font-medium">删除档案</button>
@@ -294,7 +295,10 @@
                     </div>
                 `).join('');
             } catch (e) {
-                grid.innerHTML = `<div class="col-span-full text-center text-rose-500 text-xs py-8">加载失败: ${e.message}</div>`;
+                // If parsing error, do not overwrite unless grid is empty
+                if (grid.children.length === 0 || grid.innerText.includes('加载人脸档案中')) {
+                    grid.innerHTML = `<div class="col-span-full text-center text-slate-400 text-xs py-8">正在连接人脸库...</div>`;
+                }
             }
         }
 
@@ -445,50 +449,47 @@
         async function fetchSentinelStatus() {
             try {
                 const res = await fetch('/api/faces/sentinel');
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.code === 0 && data.data) {
-                        const conf = data.data;
-                        document.getElementById('sentinelToggle').checked = conf.enabled;
-                        document.getElementById('sentinelCooldown').value = conf.cooldown_minutes || 10;
-                        document.getElementById('sentinelWechat').checked = conf.wechat_notify;
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.code === 0 && data.data) {
+                    const conf = data.data;
+                    document.getElementById('sentinelToggle').checked = conf.enabled;
+                    document.getElementById('sentinelCooldown').value = conf.cooldown_minutes || 10;
+                    document.getElementById('sentinelWechat').checked = conf.wechat_notify;
 
-                        const badge = document.getElementById('sentinelStatusBadge');
-                        if (!conf.enabled) {
-                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 flex items-center gap-1.5';
-                            badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-400"></span> 哨兵已停用';
-                        } else if (conf.status === 'camera_offline') {
-                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 flex items-center gap-1.5';
-                            badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> S20 手机休眠离线';
-                        } else {
-                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1.5';
-                            badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 哨兵实时监测中';
-                        }
+                    const badge = document.getElementById('sentinelStatusBadge');
+                    if (!conf.enabled) {
+                        badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 flex items-center gap-1.5';
+                        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-400"></span> 哨兵已停用';
+                    } else if (conf.status === 'camera_offline') {
+                        badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 flex items-center gap-1.5';
+                        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> S20 手机休眠离线';
+                    } else {
+                        badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1.5';
+                        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 哨兵实时监测中';
+                    }
 
-                        const logList = document.getElementById('sentinelLogList');
-                        if (conf.greeting_history && conf.greeting_history.length > 0) {
-                            logList.innerHTML = conf.greeting_history.slice().reverse().map(item => `
-                                <div class="p-3 rounded-xl bg-white border border-slate-100 shadow-xs flex items-center justify-between text-xs">
-                                    <div class="flex items-center gap-2.5 overflow-hidden">
-                                        <span class="w-7 h-7 shrink-0 rounded-full ${item.is_family ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'} flex items-center justify-center font-bold text-xs">
-                                            ${item.name.charAt(0)}
-                                        </span>
-                                        <div class="truncate">
-                                            <span class="font-bold text-slate-800">${item.name}</span>
-                                            <span class="text-[11px] text-slate-500 ml-1">“${item.greeting}”</span>
-                                        </div>
+                    const logList = document.getElementById('sentinelLogList');
+                    if (conf.greeting_history && conf.greeting_history.length > 0) {
+                        logList.innerHTML = conf.greeting_history.slice().reverse().map(item => `
+                            <div class="p-3 rounded-xl bg-white border border-slate-100 shadow-xs flex items-center justify-between text-xs">
+                                <div class="flex items-center gap-2.5 overflow-hidden">
+                                    <span class="w-7 h-7 shrink-0 rounded-full ${item.is_family ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'} flex items-center justify-center font-bold text-xs">
+                                        ${item.name.charAt(0)}
+                                    </span>
+                                    <div class="truncate">
+                                        <span class="font-bold text-slate-800">${item.name}</span>
+                                        <span class="text-[11px] text-slate-500 ml-1">“${item.greeting}”</span>
                                     </div>
-                                    <span class="text-[10px] text-slate-400 shrink-0 ml-2">${item.timestamp.split(' ')[1] || item.timestamp}</span>
                                 </div>
-                            `).join('');
-                        } else {
-                            logList.innerHTML = '<div class="text-xs text-slate-400 p-2">暂无近期迎宾记录，当有人走近摄像头时将自动记录。</div>';
-                        }
+                                <span class="text-[10px] text-slate-400 shrink-0 ml-2">${item.timestamp.split(' ')[1] || item.timestamp}</span>
+                            </div>
+                        `).join('');
+                    } else {
+                        logList.innerHTML = '<div class="text-xs text-slate-400 p-2">暂无近期迎宾记录，当有人走近摄像头时将自动记录。</div>';
                     }
                 }
-            } catch (e) {
-                console.error('Fetch sentinel error:', e);
-            }
+            } catch (e) {}
         }
 
         async function toggleSentinel() {
@@ -517,14 +518,7 @@
         }
 
         async function triggerTestGreeting() {
-            
-                if ('speechSynthesis' in window) {
-                    const utter = new SpeechSynthesisUtterance(data.data.greeting);
-                    utter.lang = 'zh-CN';
-                    utter.rate = 1.0;
-                    window.speechSynthesis.speak(utter);
-                }
-Swal.fire({
+            Swal.fire({
                 title: '模拟测试迎宾中...',
                 text: '正在向小智推送主动迎宾语音与微信通知',
                 allowOutsideClick: false,
@@ -538,6 +532,12 @@ Swal.fire({
                 });
                 const data = await res.json();
                 if (data.code === 0 || data.success) {
+                    if ('speechSynthesis' in window) {
+                        const utter = new SpeechSynthesisUtterance(data.data.greeting);
+                        utter.lang = 'zh-CN';
+                        utter.rate = 1.0;
+                        window.speechSynthesis.speak(utter);
+                    }
                     Swal.fire({
                         icon: 'success',
                         title: '模拟迎宾触发成功！',
@@ -557,6 +557,7 @@ Swal.fire({
         refreshAll();
         setInterval(fetchSentinelStatus, 3000);
         setInterval(refreshS20Status, 5000);
+        setInterval(fetchFaces, 5000);
     </script>
 </body>
 </html>
