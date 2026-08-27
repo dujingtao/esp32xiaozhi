@@ -1,4 +1,3 @@
-from core.services.face_sentinel import FaceSentinel
 import time
 import json
 import uuid
@@ -15,6 +14,7 @@ from core.utils.wakeup_word import WakeupWordsConfig
 from core.handle.sendAudioHandle import sendAudioMessage, send_tts_message
 from core.utils.util import remove_punctuation_and_length, opus_datas_to_wav_bytes
 from core.providers.tools.device_mcp import MCPClient, send_mcp_initialize_message
+from core.services.face_sentinel import FaceSentinel
 
 TAG = __name__
 
@@ -40,14 +40,7 @@ wakeup_words_config = WakeupWordsConfig()
 _wakeup_response_lock = asyncio.Lock()
 
 
-async def handleHelloMessage(conn:
-    pending_greet = FaceSentinel.get_pending_greeting()
-    if pending_greet:
-        conn.logger.bind(tag=TAG).info(f"检测到哨兵待播报迎宾词，优先播报: {pending_greet}")
-        if hasattr(conn, 'chat'):
-            asyncio.create_task(asyncio.to_thread(conn.chat, f"[系统迎宾] 请用温暖亲切的声音播报：'{pending_greet}'"))
-            return
- "ConnectionHandler", msg_json):
+async def handleHelloMessage(conn: "ConnectionHandler", msg_json):
     """处理hello消息"""
     audio_params = msg_json.get("audio_params")
     if audio_params:
@@ -70,6 +63,13 @@ async def handleHelloMessage(conn:
 
     await conn.websocket.send(json.dumps(conn.welcome_msg))
 
+    # 检查是否有待播报的哨兵迎宾词
+    pending_greet = FaceSentinel.get_pending_greeting()
+    if pending_greet:
+        conn.logger.bind(tag=TAG).info(f"检测到待播报迎宾词，触发播报: {pending_greet}")
+        if hasattr(conn, 'chat'):
+            conn.chat(f"[系统迎宾] 请用温暖亲切的声音播报：'{pending_greet}'")
+
 
 async def checkWakeupWords(conn: "ConnectionHandler", text):
     enable_wakeup_words_response_cache = conn.config[
@@ -79,89 +79,53 @@ async def checkWakeupWords(conn: "ConnectionHandler", text):
     # 等待tts初始化，最多等待3秒
     start_time = time.time()
     while time.time() - start_time < 3:
-        if conn.tts:
+        if conn.tts is not None:
             break
         await asyncio.sleep(0.1)
-    else:
+
+    if conn.tts is None:
+        conn.logger.bind(tag=TAG).error("TTS未初始化成功，跳过唤醒词响应")
         return False
 
-    if not enable_wakeup_words_response_cache:
-        return False
+    # 检查是否有待播报的哨兵迎宾词
+    pending_greet = FaceSentinel.get_pending_greeting()
+    if pending_greet:
+        conn.logger.bind(tag=TAG).info(f"检测到待播报迎宾词，优先播报: {pending_greet}")
+        if hasattr(conn, 'chat'):
+            conn.chat(f"[系统迎宾] 请用温暖亲切的声音播报：'{pending_greet}'")
+            return True
 
-    _, filtered_text = remove_punctuation_and_length(text)
-    if filtered_text not in conn.config.get("wakeup_words"):
-        return False
+    # 检查唤醒词匹配
+    for word in conn.config.get("wakeup_words", []):
+        if word in text:
+            # 获取配置的响应列表
+            responses = WAKEUP_CONFIG.get("responses", [])
+            if not responses:
+                return False
 
-    conn.just_woken_up = True
-    await send_tts_message(conn, "start")
+            # 随机选择一个响应
+            response = random.choice(responses)
 
-    # 获取当前音色
-    voice = getattr(conn.tts, "voice", "default")
-    if not voice:
-        voice = "default"
+            if enable_wakeup_words_response_cache:
+                async with _wakeup_response_lock:
+                    audios = wakeup_words_config.get_response(response)
+                    if audios is None:
+                        audios = await conn.tts.text_to_speak(response)
+                        if audios:
+                            wakeup_words_config.save_response(response, audios)
 
-    # 获取唤醒词回复配置
-    response = wakeup_words_config.get_wakeup_response(voice)
-    if not response or not response.get("file_path"):
-        response = {
-            "voice": "default",
-            "file_path": "config/assets/wakeup_words_short.wav",
-            "time": 0,
-            "text": "我在这里哦！",
-        }
-
-    # 获取音频数据
-    opus_packets = await audio_to_data(response.get("file_path"), use_cache=False)
-    # 播放唤醒词回复
-    conn.client_abort = False
-
-    # 将唤醒词回复视为新会话，生成新的 sentence_id，确保流控器重置
-    conn.sentence_id = str(uuid.uuid4().hex)
-
-    conn.logger.bind(tag=TAG).info(f"播放唤醒词回复: {response.get('text')}")
-    await sendAudioMessage(conn, SentenceType.FIRST, opus_packets, response.get("text"))
-    await sendAudioMessage(conn, SentenceType.LAST, [], None)
-
-    # 补充对话
-    conn.dialogue.put(Message(role="assistant", content=response.get("text")))
-
-    # 检查是否需要更新唤醒词回复
-    if time.time() - response.get("time", 0) > WAKEUP_CONFIG["refresh_time"]:
-        if not _wakeup_response_lock.locked():
-            asyncio.create_task(wakeupWordsResponse(conn))
-    return True
-
-
-async def wakeupWordsResponse(conn: "ConnectionHandler"):
-    if not conn.tts:
-        return
-
-    try:
-        # 尝试获取锁，如果获取不到就返回
-        if not await _wakeup_response_lock.acquire():
-            return
-
-        # 从预定义回复列表中随机选择一个回复
-        result = random.choice(WAKEUP_CONFIG["responses"])
-        if not result or len(result) == 0:
-            return
-
-        # 生成TTS音频
-        tts_result = await asyncio.to_thread(conn.tts.to_tts, result)
-        if not tts_result:
-            return
-
-        # 获取当前音色
-        voice = getattr(conn.tts, "voice", "default")
-
-        # 使用链接的sample_rate
-        wav_bytes = opus_datas_to_wav_bytes(tts_result, sample_rate=conn.sample_rate)
-        file_path = wakeup_words_config.generate_file_path(voice)
-        with open(file_path, "wb") as f:
-            f.write(wav_bytes)
-        # 更新配置
-        wakeup_words_config.update_wakeup_response(voice, file_path, result)
-    finally:
-        # 确保在任何情况下都释放锁
-        if _wakeup_response_lock.locked():
-            _wakeup_response_lock.release()
+                if audios:
+                    conn.sentence_id = str(uuid.uuid4().hex)
+                    await sendAudioMessage(
+                        conn, SentenceType.FIRST, audios, response, conn.sentence_id
+                    )
+                    return True
+            else:
+                audios = await conn.tts.text_to_speak(response)
+                if audios:
+                    conn.sentence_id = str(uuid.uuid4().hex)
+                    await sendAudioMessage(
+                        conn, SentenceType.FIRST, audios, response, conn.sentence_id
+                    )
+                    return True
+    return False

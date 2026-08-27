@@ -16,21 +16,21 @@ CASCADE_PATH = "/app/data/models/haarcascade_frontalface_default.xml"
 PUSHPLUS_TOKEN = "35c9b21d51cf40978f0e450c4755c73b"
 
 class FaceSentinel:
-
+    _instance = None
+    _lock = threading.Lock()
     _pending_greeting = None
 
     @classmethod
     def get_pending_greeting(cls):
-        g = cls._pending_greeting
-        cls._pending_greeting = None
-        return g
+        with cls._lock:
+            g = cls._pending_greeting
+            cls._pending_greeting = None
+            return g
 
     @classmethod
     def set_pending_greeting(cls, text):
-        cls._pending_greeting = text
-
-    _instance = None
-    _lock = threading.Lock()
+        with cls._lock:
+            cls._pending_greeting = text
 
     def __new__(cls, *args, **kwargs):
         with cls._lock:
@@ -120,7 +120,7 @@ class FaceSentinel:
                     nparr = np.frombuffer(img_bytes, np.uint8)
                     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     return frame, img_bytes
-        except Exception as e:
+        except Exception:
             pass
         return None, None
 
@@ -137,7 +137,7 @@ class FaceSentinel:
                 minSize=(30, 30)
             )
             return [(x*2, y*2, w*2, h*2) for (x, y, w, h) in faces]
-        except Exception as e:
+        except Exception:
             return []
 
     def _recognize_person(self, frame, img_bytes):
@@ -156,7 +156,6 @@ class FaceSentinel:
         if not family_members:
             return "访客朋友", False
 
-        # Match registered names
         name = family_members[0].get("name", "布布爸爸") if isinstance(family_members[0], dict) else "布布爸爸"
         return name, True
 
@@ -202,8 +201,8 @@ class FaceSentinel:
             print(f"{TAG} PushPlus error: {e}")
 
     def trigger_greeting(self, person_name: str = "布布爸爸", is_family: bool = True):
-        FaceSentinel.set_pending_greeting(greeting_text)
         greeting_text = self._generate_greeting(person_name, is_family)
+        FaceSentinel.set_pending_greeting(greeting_text)
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         event = {
