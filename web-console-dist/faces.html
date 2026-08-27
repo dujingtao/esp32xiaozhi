@@ -532,12 +532,7 @@
                 });
                 const data = await res.json();
                 if (data.code === 0 || data.success) {
-                    if ('speechSynthesis' in window) {
-                        const utter = new SpeechSynthesisUtterance(data.data.greeting);
-                        utter.lang = 'zh-CN';
-                        utter.rate = 1.0;
-                        window.speechSynthesis.speak(utter);
-                    }
+
                     Swal.fire({
                         icon: 'success',
                         title: '模拟迎宾触发成功！',
