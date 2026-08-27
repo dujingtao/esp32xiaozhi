@@ -53,8 +53,8 @@ class ASRProvider(ASRProviderBase):
         
         self.interface_type = InterfaceType.LOCAL
         self.model_dir = config.get("model_dir")
-        self.output_dir = config.get("output_dir")  # 修正配置键名
-        self.language = config.get("language", "auto")
+        self.output_dir = config.get("output_dir", "tmp/")
+        self.language = config.get("language", "zh")
         self.delete_audio_file = delete_audio_file
 
         # 确保输出目录存在
@@ -65,7 +65,6 @@ class ASRProvider(ASRProviderBase):
                 vad_kwargs={"max_single_segment_time": 30000},
                 disable_update=True,
                 hub="hf",
-                # device="cuda:0",  # 启用GPU加速
             )
 
     async def speech_to_text(
@@ -76,7 +75,7 @@ class ASRProvider(ASRProviderBase):
         
         while retry_count < MAX_RETRIES:
             try:
-                if artifacts is None:
+                if artifacts is None or not getattr(artifacts, "pcm_bytes", None):
                     return "", None
 
                 # 语音识别 - 使用线程池避免阻塞事件循环
@@ -89,9 +88,27 @@ class ASRProvider(ASRProviderBase):
                     use_itn=True,
                     batch_size_s=60,
                 )
-                text = lang_tag_filter(result[0]["text"])
+                
+                raw_text = ""
+                if isinstance(result, list) and len(result) > 0:
+                    if isinstance(result[0], dict):
+                        raw_text = result[0].get("text", "")
+                    elif isinstance(result[0], str):
+                        raw_text = result[0]
+                    else:
+                        raw_text = str(result[0])
+                elif isinstance(result, str):
+                    raw_text = result
+                elif isinstance(result, dict):
+                    raw_text = result.get("text", "")
+
+                if not raw_text or not raw_text.strip():
+                    return "", artifacts.file_path
+
+                text = lang_tag_filter(raw_text)
+                res_content = text.get("content", "") if isinstance(text, dict) else str(text)
                 logger.bind(tag=TAG).debug(
-                    f"语音识别耗时: {time.time() - start_time:.3f}s | 结果: {text['content']}"
+                    f"语音识别耗时: {time.time() - start_time:.3f}s | 结果: {res_content}"
                 )
 
                 return text, artifacts.file_path

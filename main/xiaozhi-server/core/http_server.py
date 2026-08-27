@@ -3,6 +3,7 @@ from aiohttp import web
 from config.logger import setup_logging
 from core.api.ota_handler import OTAHandler
 from core.api.vision_handler import VisionHandler
+from core.api.face_handler import FaceWebHandler
 
 TAG = __name__
 
@@ -13,6 +14,7 @@ class SimpleHttpServer:
         self.logger = setup_logging()
         self.ota_handler = OTAHandler(config)
         self.vision_handler = VisionHandler(config)
+        self.face_handler = FaceWebHandler(config)
 
     def _get_websocket_url(self, local_ip: str, port: int) -> str:
         """获取websocket地址
@@ -72,6 +74,18 @@ class SimpleHttpServer:
                         web.options(
                             "/mcp/vision/explain", self.vision_handler.handle_options
                         ),
+                        # 人脸记忆与视觉中枢管理后台
+                        web.get("/faces", self.face_handler.handle_page),
+                        web.get("/faces/", self.face_handler.handle_page),
+                        web.get("/faces/index.html", self.face_handler.handle_page),
+                        web.get("/api/faces", self.face_handler.handle_get_faces),
+                        web.get("/api/faces/image/{filename}", self.face_handler.handle_get_image),
+                        web.post("/api/faces/register", self.face_handler.handle_register_face),
+                        web.post("/api/faces/update", self.face_handler.handle_update_face),
+                        web.post("/api/faces/delete", self.face_handler.handle_delete_face),
+                        web.post("/api/faces/recognize", self.face_handler.handle_test_recognize),
+                        web.get("/api/faces/s20/status", self.face_handler.handle_s20_status),
+
                     ]
                 )
 

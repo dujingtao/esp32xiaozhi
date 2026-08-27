@@ -107,6 +107,19 @@ async def no_voice_close_connect(conn: "ConnectionHandler", have_voice):
     if have_voice:
         conn.last_activity_time = time.time() * 1000
         return
+    # 如果已经触发过告别退出，严禁重复触发
+    if getattr(conn, "goodbye_triggered", False):
+        return
+
+    # 如果当前有正在运行的倒计时或闹钟，重置空闲计时并维持连接，严禁提前退出
+    try:
+        from plugins_func.functions.alarm_and_timer import has_active_timers
+        device_id = getattr(conn, "device_id", None)
+        if has_active_timers(device_id):
+            conn.last_activity_time = time.time() * 1000
+            return
+    except Exception:
+        pass
     # 只有在已经初始化过时间戳的情况下才进行超时检查
     if conn.last_activity_time > 0.0:
         no_voice_time = time.time() * 1000 - conn.last_activity_time
@@ -117,7 +130,9 @@ async def no_voice_close_connect(conn: "ConnectionHandler", have_voice):
             not conn.close_after_chat
             and no_voice_time > 1000 * close_connection_no_voice_time
         ):
+            conn.goodbye_triggered = True
             conn.close_after_chat = True
+            conn.last_activity_time = time.time() * 1000
             conn.client_abort = False
             end_prompt = conn.config.get("end_prompt", {})
             if end_prompt and end_prompt.get("enable", True) is False:

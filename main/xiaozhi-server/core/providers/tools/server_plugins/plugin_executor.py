@@ -96,7 +96,7 @@ class ServerPluginExecutor(ToolExecutor):
         tools = {}
 
         # 获取必要的函数
-        necessary_functions = ["handle_exit_intent", "get_lunar"]
+        necessary_functions = ["handle_exit_intent", "get_lunar", "record_note", "read_notes", "delete_note", "set_countdown_timer", "set_alarm_clock", "list_active_timers", "cancel_timer_or_alarm", "test_alarm_sound", "see_through_phone_camera", "control_phone_camera_torch", "register_family_face", "recognize_family_face", "list_family_faces", "delete_family_face"]
 
         # 获取配置中的函数
         config_functions = self.config["Intent"][

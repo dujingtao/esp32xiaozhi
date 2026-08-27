@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="description" content="小智后端服务智控台">
+    <link rel="icon" href="/favicon.ico">
+    <title>智控台 - 小智 AI 管理系统</title>
+    <script defer="defer" src="/js/app.19fd86ef.js"></script>
+    <link href="/css/app.5a7e25c8.css" rel="stylesheet">
+    <style>
+        /* 顶部导航栏自适应与纯无痕平滑滚动 */
+        .header-container {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            width: 100% !important;
+            height: 60px !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+        }
+        .header-left {
+            flex-shrink: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        .header-center {
+            display: flex !important;
+            align-items: center !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            white-space: nowrap !important;
+            flex: 1 !important;
+            margin: 0 16px !important;
+            scroll-behavior: smooth !important;
+            -webkit-overflow-scrolling: touch !important;
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
+        }
+        .header-center::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        .header-right {
+            flex-shrink: 0 !important;
+            margin-left: auto !important;
+            display: flex !important;
+            align-items: center !important;
+            z-index: 10 !important;
+        }
+        .equipment-management {
+            flex-shrink: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+        }
+        #nav-face-custom-tab:hover .nav-text {
+            color: #409eff !important;
+        }
+        #nav-face-custom-tab:hover svg {
+            stroke: #409eff !important;
+        }
+
+        /* 智能体卡片【人脸识别】药丸按钮 */
+        .face-card-custom-btn {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 4px 14px !important;
+            font-size: 13px !important;
+            border-radius: 16px !important;
+            background-color: #ecf5ff !important;
+            color: #409eff !important;
+            cursor: pointer !important;
+            margin-right: 8px !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            user-select: none !important;
+            font-weight: 500 !important;
+            border: 1px solid #d9ecff !important;
+            box-sizing: border-box !important;
+        }
+        .face-card-custom-btn:hover {
+            background-color: #409eff !important;
+            color: #ffffff !important;
+            border-color: #409eff !important;
+            box-shadow: 0 2px 8px rgba(64, 158, 255, 0.25) !important;
+        }
+
+        /* 炫酷悬浮大屏工作台弹窗动画与毛玻璃质感 */
+        #face-memory-modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            z-index: 999999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+        }
+        #face-memory-modal.active {
+            display: flex;
+            opacity: 1;
+        }
+        #face-memory-iframe-container {
+            width: 100%;
+            max-width: 1380px;
+            height: 90vh;
+            background: #ffffff;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.95);
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #face-memory-modal.active #face-memory-iframe-container {
+            transform: scale(1);
+        }
+        .modal-header-btn {
+            border: none;
+            outline: none;
+            background: #f1f5f9;
+            color: #64748b;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .modal-header-btn:hover {
+            background: #e2e8f0;
+            color: #0f172a;
+            transform: rotate(90deg);
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <!-- 内嵌炫酷悬浮大屏工作台弹窗 -->
+    <div id="face-memory-modal" onclick="handleBackdropClick(event)">
+        <div id="face-memory-iframe-container" onclick="event.stopPropagation()">
+            <div style="padding: 12px 24px; background: #ffffff; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; user-select: none;">
+                <div style="display: flex; align-items: center; gap: 10px; font-weight: 700; color: #0f172a; font-size: 15px;">
+                    <div style="width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, #4f46e5, #3b82f6); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);">👤</div>
+                    <span>小智 AI · 家庭人脸记忆与视觉中枢管理工作台</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    <a href="/faces.html" target="_blank" style="font-size: 13px; color: #4f46e5; text-decoration: none; padding: 6px 14px; border-radius: 8px; background: #eef2ff; font-weight: 600; border: 1px solid #e0e7ff; transition: all 0.2s;">新窗口独立打开 ↗</a>
+                    <button class="modal-header-btn" onclick="closeFaceMemoryModal()" title="关闭 (Esc)">✕</button>
+                </div>
+            </div>
+            <iframe id="face-iframe" src="" style="width: 100%; height: 100%; border: none; background: #f8fafc;"></iframe>
+        </div>
+    </div>
+
+    <script>
+        // 弹窗控制方法
+        function openFaceMemoryModal() {
+            const modal = document.getElementById('face-memory-modal');
+            const iframe = document.getElementById('face-iframe');
+            if (!iframe.src || iframe.src === window.location.href || !iframe.src.includes('/faces.html')) {
+                iframe.src = '/faces.html';
+            }
+            modal.classList.add('active');
+        }
+
+        function closeFaceMemoryModal() {
+            const modal = document.getElementById('face-memory-modal');
+            modal.classList.remove('active');
+        }
+
+        function handleBackdropClick(event) {
+            if (event.target.id === 'face-memory-modal') {
+                closeFaceMemoryModal();
+            }
+        }
+
+        // 监听 ESC 键关闭弹窗
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeFaceMemoryModal();
+            }
+        });
+
+        // 1. 鼠标滚轮平滑滑动导航栏
+        function initNavSmoothScroll() {
+            const center = document.querySelector('.header-center');
+            if (center && !center._hasSmoothWheel) {
+                center._hasSmoothWheel = true;
+                center.addEventListener('wheel', function(e) {
+                    if (e.deltaY !== 0) {
+                        e.preventDefault();
+                        center.scrollBy({
+                            left: e.deltaY * 1.5,
+                            behavior: 'smooth'
+                        });
+                    }
+                }, { passive: false });
+            }
+        }
+
+        // 2. 原生低调注入人脸菜单与卡片按钮，点击唤起悬浮大屏弹窗
+        function syncFaceUI() {
+            initNavSmoothScroll();
+
+            // A. 顶部导航栏：点击唤起悬浮工作台
+            const headerCenter = document.querySelector('.header-center');
+            if (headerCenter && !document.getElementById('nav-face-custom-tab')) {
+                const tabs = headerCenter.querySelectorAll('.equipment-management');
+                for (let tab of tabs) {
+                    if (tab.innerText && tab.innerText.includes('知识库')) {
+                        const faceTab = document.createElement('div');
+                        faceTab.id = 'nav-face-custom-tab';
+                        faceTab.className = 'equipment-management';
+                        faceTab.style.cssText = 'cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap;';
+                        faceTab.innerHTML = `
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#606266" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle; transition: stroke 0.2s;">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                            <span class="nav-text" style="font-size: 14px; color: #303133; font-weight: normal; line-height: 1; transition: color 0.2s;">人脸记忆</span>
+                        `;
+                        faceTab.onclick = openFaceMemoryModal;
+                        tab.parentNode.insertBefore(faceTab, tab.nextSibling);
+                        break;
+                    }
+                }
+            }
+
+            // B. 智能体卡片：点击唤起悬浮工作台
+            const btns = document.querySelectorAll('.settings-btn');
+            for (let b of btns) {
+                if (b.innerText && b.innerText.trim() === '声纹识别') {
+                    const parent = b.parentNode;
+                    if (parent && !parent.querySelector('.face-card-custom-btn')) {
+                        const faceBtn = document.createElement('div');
+                        faceBtn.className = 'face-card-custom-btn';
+                        faceBtn.innerText = '人脸识别';
+                        faceBtn.onclick = function(e) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            openFaceMemoryModal();
+                        };
+                        parent.insertBefore(faceBtn, b.nextSibling);
+                    }
+                }
+            }
+        }
+
+        setInterval(syncFaceUI, 300);
+    </script>
+</body>
+</html>

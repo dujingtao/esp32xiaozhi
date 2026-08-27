@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta name="description" content="小智后端服务智控台">
+    <link rel="icon" href="/favicon.ico">
+    <title>智控台 - 小智 AI 管理系统</title>
+    <script defer="defer" src="/js/app.19fd86ef.js"></script>
+    <link href="/css/app.5a7e25c8.css" rel="stylesheet">
+    <style>
+        /* 顶部导航栏支持滚轮横向滑动 */
+        .header-container {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        .header-left {
+            flex-shrink: 0 !important;
+        }
+        .header-center {
+            display: flex !important;
+            align-items: center !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            white-space: nowrap !important;
+            flex: 1 !important;
+            margin: 0 14px !important;
+            scrollbar-width: thin !important;
+            scrollbar-color: #cbd5e1 transparent !important;
+        }
+        .header-center::-webkit-scrollbar {
+            height: 3px !important;
+        }
+        .header-center::-webkit-scrollbar-thumb {
+            background: #cbd5e1 !important;
+            border-radius: 3px !important;
+        }
+        .header-right {
+            flex-shrink: 0 !important;
+            margin-left: auto !important;
+            display: flex !important;
+            align-items: center !important;
+            z-index: 10 !important;
+        }
+        .equipment-management {
+            flex-shrink: 0 !important;
+        }
+        /* 人脸记忆导航项 hover 效果 */
+        #nav-face-custom-tab:hover .nav-text {
+            color: #409eff !important;
+        }
+        #nav-face-custom-tab:hover svg {
+            stroke: #409eff !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        // 1. 鼠标滚轮横向滑动导航栏
+        function initNavScroll() {
+            const center = document.querySelector('.header-center');
+            if (center && !center._hasWheel) {
+                center._hasWheel = true;
+                center.addEventListener('wheel', function(e) {
+                    if (e.deltaY !== 0) {
+                        e.preventDefault();
+                        center.scrollLeft += e.deltaY;
+                    }
+                }, { passive: false });
+            }
+        }
+
+        // 2. 原生低调注入人脸菜单与卡片按钮（保持严格唯一）
+        function syncFaceUI() {
+            initNavScroll();
+
+            // A. 顶部导航栏：在【知识库】旁边挂载唯一【人脸记忆】
+            const headerCenter = document.querySelector('.header-center');
+            if (headerCenter && !document.getElementById('nav-face-custom-tab')) {
+                const tabs = headerCenter.querySelectorAll('.equipment-management');
+                for (let tab of tabs) {
+                    if (tab.innerText && tab.innerText.includes('知识库')) {
+                        const faceTab = document.createElement('div');
+                        faceTab.id = 'nav-face-custom-tab';
+                        faceTab.className = 'equipment-management';
+                        faceTab.style.cssText = 'cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap;';
+                        faceTab.innerHTML = `
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#606266" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle; transition: stroke 0.2s;">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                            <span class="nav-text" style="font-size: 14px; color: #303133; font-weight: normal; line-height: 1; transition: color 0.2s;">人脸记忆</span>
+                        `;
+                        faceTab.onclick = function() {
+                            window.open('/faces.html', '_blank');
+                        };
+                        tab.parentNode.insertBefore(faceTab, tab.nextSibling);
+                        break;
+                    }
+                }
+            }
+
+            // B. 智能体卡片：在【声纹识别】旁边挂载唯一【人脸识别】
+            const btns = document.querySelectorAll('.settings-btn');
+            for (let b of btns) {
+                if (b.innerText && b.innerText.trim() === '声纹识别') {
+                    const parent = b.parentNode;
+                    if (parent && !parent.querySelector('.face-card-custom-btn')) {
+                        const faceBtn = document.createElement('div');
+                        faceBtn.className = 'settings-btn face-card-custom-btn';
+                        faceBtn.innerText = '人脸识别';
+                        faceBtn.onclick = function(e) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            window.open('/faces.html', '_blank');
+                        };
+                        parent.insertBefore(faceBtn, b.nextSibling);
+                    }
+                }
+            }
+        }
+
+        setInterval(syncFaceUI, 350);
+    </script>
+</body>
+</html>

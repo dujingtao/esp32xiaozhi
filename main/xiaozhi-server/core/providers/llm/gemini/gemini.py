@@ -25,10 +25,6 @@ def test_proxy(proxy_url: str, test_url: str) -> bool:
 
 
 def setup_proxy_env(http_proxy: str | None, https_proxy: str | None):
-    """
-    分别测试 HTTP 和 HTTPS 代理是否可用，并设置环境变量。
-    如果 HTTPS 代理不可用但 HTTP 可用，会将 HTTPS_PROXY 也指向 HTTP。
-    """
     test_http_url = "http://www.google.com"
     test_https_url = "https://www.google.com"
 
@@ -52,7 +48,6 @@ def setup_proxy_env(http_proxy: str | None, https_proxy: str | None):
                 f"配置提供的Gemini HTTPS代理不可用: {https_proxy}"
             )
 
-    # 如果https_proxy不可用，但http_proxy可用且能走通https，则复用http_proxy作为https_proxy
     if ok_http and not ok_https:
         if test_proxy(http_proxy, test_https_url):
             os.environ["HTTPS_PROXY"] = http_proxy
@@ -68,7 +63,7 @@ def setup_proxy_env(http_proxy: str | None, https_proxy: str | None):
 
 class LLMProvider(LLMProviderBase):
     def __init__(self, cfg: Dict[str, Any]):
-        self.model_name = cfg.get("model_name", "gemini-2.0-flash")
+        self.model_name = cfg.get("model_name", "gemini-3.6-flash")
         self.api_key = cfg["api_key"]
         http_proxy = cfg.get("http_proxy")
         https_proxy = cfg.get("https_proxy")
@@ -89,7 +84,7 @@ class LLMProvider(LLMProviderBase):
         genai.configure(api_key=self.api_key)
 
         # 设置请求超时（秒）
-        self.timeout = cfg.get("timeout", 120)  # 默认120秒
+        self.timeout = cfg.get("timeout", 120)
 
         # 创建模型实例
         self.model = genai.GenerativeModel(self.model_name)
@@ -102,6 +97,41 @@ class LLMProvider(LLMProviderBase):
         )
 
     @staticmethod
+    def _clean_schema(schema: Any) -> Any:
+        """Filter out unsupported JSONSchema fields and correctly preserve properties for Gemini Schema."""
+        if isinstance(schema, dict):
+            ALLOWED_SCHEMA_KEYS = {
+                "type", "format", "description", "nullable", "enum",
+                "properties", "required", "items"
+            }
+            cleaned = {}
+            for k, v in schema.items():
+                if k == "properties" and isinstance(v, dict):
+                    cleaned["properties"] = {
+                        prop_name: LLMProvider._clean_schema(prop_schema)
+                        for prop_name, prop_schema in v.items()
+                    }
+                elif k in ALLOWED_SCHEMA_KEYS:
+                    cleaned[k] = LLMProvider._clean_schema(v)
+
+            if "properties" in cleaned and "type" not in cleaned:
+                cleaned["type"] = "object"
+
+            if "required" in cleaned:
+                if isinstance(cleaned["required"], list):
+                    props = cleaned.get("properties", {})
+                    cleaned["required"] = [r for r in cleaned["required"] if r in props]
+                    if not cleaned["required"]:
+                        del cleaned["required"]
+                else:
+                    del cleaned["required"]
+
+            return cleaned
+        elif isinstance(schema, list):
+            return [LLMProvider._clean_schema(item) for item in schema]
+        return schema
+
+    @staticmethod
     def _build_tools(funcs: List[Dict[str, Any]] | None):
         if not funcs:
             return None
@@ -111,14 +141,13 @@ class LLMProvider(LLMProviderBase):
                     types.FunctionDeclaration(
                         name=f["function"]["name"],
                         description=f["function"]["description"],
-                        parameters=f["function"]["parameters"],
+                        parameters=LLMProvider._clean_schema(f["function"]["parameters"]),
                     )
                     for f in funcs
                 ]
             )
         ]
 
-    # Gemini文档提到，无需维护session-id，直接用dialogue拼接而成
     def response(self, session_id, dialogue, **kwargs):
         yield from self._generate(dialogue, None)
 
@@ -128,7 +157,6 @@ class LLMProvider(LLMProviderBase):
     def _generate(self, dialogue, tools):
         role_map = {"assistant": "model", "user": "user"}
         contents: list = []
-        # 拼接对话
         for m in dialogue:
             r = m["role"]
 
@@ -165,19 +193,19 @@ class LLMProvider(LLMProviderBase):
                 }
             )
 
+        req_opts = {"timeout": self.timeout} if self.timeout else None
         stream: GenerateContentResponse = self.model.generate_content(
             contents=contents,
             generation_config=self.gen_cfg,
             tools=tools,
             stream=True,
-            timeout=self.timeout,
+            request_options=req_opts,
         )
 
         try:
             for chunk in stream:
                 cand = chunk.candidates[0]
                 for part in cand.content.parts:
-                    # a) 函数调用-通常是最后一段话才是函数调用
                     if getattr(part, "function_call", None):
                         fc = part.function_call
                         yield None, [
@@ -193,21 +221,19 @@ class LLMProvider(LLMProviderBase):
                             )
                         ]
                         return
-                    # b) 普通文本
                     if getattr(part, "text", None):
                         yield part.text if tools is None else (part.text, None)
 
         finally:
             if tools is not None:
-                yield None, None  # function‑mode 结束，返回哑包
+                yield None, None
 
-    # 关闭stream，预留后续打断对话功能的功能方法，官方文档推荐打断对话要关闭上一个流，可以有效减少配额计费和资源占用
     @staticmethod
     def _safe_finish_stream(stream: GenerateContentResponse):
         if hasattr(stream, "resolve"):
-            stream.resolve()  # Gemini SDK version ≥ 0.5.0
+            stream.resolve()
         elif hasattr(stream, "close"):
-            stream.close()  # Gemini SDK version < 0.5.0
+            stream.close()
         else:
-            for _ in stream:  # 兜底耗尽
+            for _ in stream:
                 pass
