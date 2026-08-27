@@ -46,8 +46,8 @@ class FaceSentinel:
         self.config = {
             "enabled": True,
             "camera_url": "http://100.122.149.94:8080/shot.jpg",
-            "check_interval": 3.0,
-            "cooldown_minutes": 10,
+            "check_interval": 2.5,
+            "cooldown_minutes": 5,
             "wechat_notify": True,
             "greet_stranger": True,
             "last_global_greeting_time": 0,
@@ -62,7 +62,7 @@ class FaceSentinel:
         
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.worker_thread.start()
-        print(f"{TAG} Initialized and background monitor started.")
+        print(f"{TAG} Initialized and proactive visual monitor started.")
 
     def _init_cascade(self):
         try:
@@ -96,8 +96,8 @@ class FaceSentinel:
             "enabled": self.config.get("enabled", True),
             "status": self.status,
             "camera_url": self.config.get("camera_url"),
-            "check_interval": self.config.get("check_interval", 3.0),
-            "cooldown_minutes": self.config.get("cooldown_minutes", 10),
+            "check_interval": self.config.get("check_interval", 2.5),
+            "cooldown_minutes": self.config.get("cooldown_minutes", 5),
             "wechat_notify": self.config.get("wechat_notify", True),
             "greet_stranger": self.config.get("greet_stranger", True),
             "last_check_time": self.last_check_time,
@@ -155,7 +155,7 @@ class FaceSentinel:
         if not family_members:
             return "访客朋友", False
 
-        name = family_members[0].get("name", "布布爸爸")
+        name = family_members[0].get("name", "布布爸爸") if isinstance(family_members[0], dict) else "布布爸爸"
         return name, True
 
     def _generate_greeting(self, name: str, is_family: bool):
@@ -172,7 +172,7 @@ class FaceSentinel:
             sub_greeting = "今天工作学习辛苦啦，需要为您播放点轻松的音乐吗？"
         else:
             time_greeting = "晚上好"
-            sub_greeting = "夜深了，注意保护眼睛早点休息哦！"
+            sub_greeting = "夜深了，怎么还没休息呢？有什么需要小智帮您的吗？"
 
         if is_family:
             return f"{name}，{time_greeting}！{sub_greeting}"
@@ -218,9 +218,9 @@ class FaceSentinel:
 
         wechat_html = f"""
         <div style="font-family: sans-serif; padding: 12px; border-left: 4px solid #4f46e5;">
-            <h3 style="color: #1e293b; margin: 0 0 8px 0;">🤖 小智视觉哨兵 · 主动迎宾通知</h3>
+            <h3 style="color: #1e293b; margin: 0 0 8px 0;">🤖 小智视觉哨兵 · 主动唤醒与迎宾通知</h3>
             <p><strong>检测人物：</strong>{person_name} ({'家庭成员' if is_family else '访客'})</p>
-            <p><strong>迎宾问候：</strong>{greeting_text}</p>
+            <p><strong>主动播报：</strong>{greeting_text}</p>
             <p><strong>触发时间：</strong>{now_str}</p>
         </div>
         """
@@ -228,8 +228,17 @@ class FaceSentinel:
 
         try:
             from core.utils.connection_registry import ConnectionRegistry
-            prompt = f"[视觉迎宾事件] 检测到【{person_name}】走到了摄像头前。请用热情温暖的声音，主动向他打招呼迎宾，内容大致为：'{greeting_text}'。"
-            ConnectionRegistry.broadcast_chat(prompt)
+            prompt = (
+                f"[主动视觉感知唤醒事件] 你通过 S20 手机摄像头感知到【{person_name}】走到了音箱面前。"
+                f"当前时间为 {now_str}。"
+                f"请像极具温度的贴心管家一样，主动先开口向他打招呼迎宾，内容大致为：'{greeting_text}'。"
+                f"播报完毕后设备将自动开启麦克风进入倾听模式，等待他的自然回应。语调亲切温暖。"
+            )
+            dispatched = ConnectionRegistry.broadcast_proactive_chat(prompt)
+            if dispatched:
+                print(f"{TAG} Successfully dispatched autonomous proactive chat to ESP32 hardware!")
+            else:
+                print(f"{TAG} Saved as pending greeting for next immediate wake-up.")
         except Exception as e:
             print(f"{TAG} Broadcast chat error: {e}")
 
@@ -237,7 +246,7 @@ class FaceSentinel:
 
     def _run_loop(self):
         while True:
-            time.sleep(self.config.get("check_interval", 3.0))
+            time.sleep(self.config.get("check_interval", 2.5))
             if not self.config.get("enabled", True):
                 self.status = "paused"
                 continue
@@ -251,11 +260,11 @@ class FaceSentinel:
             self.status = "monitoring"
             faces = self._detect_faces(frame)
             if len(faces) > 0:
-                cooldown_sec = self.config.get("cooldown_minutes", 10) * 60
+                cooldown_sec = self.config.get("cooldown_minutes", 5) * 60
                 now_ts = time.time()
                 last_global = self.config.get("last_global_greeting_time", 0)
 
-                # 全局防骚扰冷却：在 cooldown 周期内（默认10分钟），不重复播报迎宾
+                # 全局防骚扰冷却
                 if now_ts - last_global < cooldown_sec:
                     continue
 
@@ -263,7 +272,7 @@ class FaceSentinel:
                 if not is_family and not self.config.get("greet_stranger", True):
                     continue
 
-                print(f"{TAG} Face triggered: {person_name}, executing greeting with cooldown {cooldown_sec}s!")
+                print(f"{TAG} Face triggered: {person_name}, executing autonomous proactive wakeup!")
                 self.config["last_global_greeting_time"] = now_ts
                 self.save_config()
                 self.trigger_greeting(person_name, is_family)

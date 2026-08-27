@@ -219,7 +219,11 @@ class ConnectionHandler:
                 f"{self.client_ip} conn - Headers: {self.headers}"
             )
 
-            self.device_id = self.headers.get("device-id", None)
+            self.device_id = self.headers.get("device-id", None) or f"{self.client_ip}_{id(self)}"
+            try:
+                ConnectionRegistry.register(self.device_id, self)
+            except Exception as e:
+                self.logger.bind(tag=TAG).warning(f"ConnectionRegistry register error: {e}")
 
             # 认证通过,继续处理
             self.websocket = ws
@@ -1052,6 +1056,22 @@ class ConnectionHandler:
         self.prompt = prompt
         # 更新系统prompt至上下文
         self.dialogue.update_system_message(self.prompt)
+
+    def proactive_wake_and_chat(self, proactive_prompt: str):
+        """主动唤醒设备并由大模型发起对话，播报完毕后设备自动开启麦克风进入倾听模式"""
+        try:
+            self.logger.bind(tag=TAG).info(f"主动唤醒并开启对话: {proactive_prompt}")
+            self.last_activity_time = time.time() * 1000
+            
+            # 使用现有的完整对话与TTS框架直接驱动设备播报与自动开麦
+            if hasattr(self, 'loop') and self.loop and self.loop.is_running():
+                self.loop.call_soon_threadsafe(self.chat, proactive_prompt)
+            else:
+                self.chat(proactive_prompt)
+            return True
+        except Exception as e:
+            self.logger.bind(tag=TAG).error(f"主动唤醒执行异常: {e}")
+            return False
 
     def chat(self, query, depth=0):
         # 保存当前任务的sentence_id到局部变量，避免被新任务覆盖
