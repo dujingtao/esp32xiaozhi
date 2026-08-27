@@ -517,7 +517,14 @@
         }
 
         async function triggerTestGreeting() {
-            Swal.fire({
+            
+                if ('speechSynthesis' in window) {
+                    const utter = new SpeechSynthesisUtterance(data.data.greeting);
+                    utter.lang = 'zh-CN';
+                    utter.rate = 1.0;
+                    window.speechSynthesis.speak(utter);
+                }
+Swal.fire({
                 title: '模拟测试迎宾中...',
                 text: '正在向小智推送主动迎宾语音与微信通知',
                 allowOutsideClick: false,

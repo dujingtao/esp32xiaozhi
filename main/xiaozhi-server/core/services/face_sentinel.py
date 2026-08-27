@@ -16,6 +16,19 @@ CASCADE_PATH = "/app/data/models/haarcascade_frontalface_default.xml"
 PUSHPLUS_TOKEN = "35c9b21d51cf40978f0e450c4755c73b"
 
 class FaceSentinel:
+
+    _pending_greeting = None
+
+    @classmethod
+    def get_pending_greeting(cls):
+        g = cls._pending_greeting
+        cls._pending_greeting = None
+        return g
+
+    @classmethod
+    def set_pending_greeting(cls, text):
+        cls._pending_greeting = text
+
     _instance = None
     _lock = threading.Lock()
 
@@ -189,6 +202,7 @@ class FaceSentinel:
             print(f"{TAG} PushPlus error: {e}")
 
     def trigger_greeting(self, person_name: str = "布布爸爸", is_family: bool = True):
+        FaceSentinel.set_pending_greeting(greeting_text)
         greeting_text = self._generate_greeting(person_name, is_family)
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

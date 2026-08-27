@@ -1,3 +1,4 @@
+from core.services.face_sentinel import FaceSentinel
 import time
 import json
 import uuid
@@ -39,7 +40,14 @@ wakeup_words_config = WakeupWordsConfig()
 _wakeup_response_lock = asyncio.Lock()
 
 
-async def handleHelloMessage(conn: "ConnectionHandler", msg_json):
+async def handleHelloMessage(conn:
+    pending_greet = FaceSentinel.get_pending_greeting()
+    if pending_greet:
+        conn.logger.bind(tag=TAG).info(f"检测到哨兵待播报迎宾词，优先播报: {pending_greet}")
+        if hasattr(conn, 'chat'):
+            asyncio.create_task(asyncio.to_thread(conn.chat, f"[系统迎宾] 请用温暖亲切的声音播报：'{pending_greet}'"))
+            return
+ "ConnectionHandler", msg_json):
     """处理hello消息"""
     audio_params = msg_json.get("audio_params")
     if audio_params:
