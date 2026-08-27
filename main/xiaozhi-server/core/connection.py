@@ -1,3 +1,4 @@
+from core.utils.connection_registry import ConnectionRegistry
 import os
 import sys
 import copy
@@ -276,6 +277,9 @@ class ConnectionHandler:
                     )
 
     async def _save_and_close(self, ws):
+        if hasattr(self, 'device_id') and self.device_id:
+            ConnectionRegistry.unregister(self.device_id)
+
         """保存记忆并关闭连接"""
         try:
             # 守护线程1：独立生成标题（不依赖记忆模型）

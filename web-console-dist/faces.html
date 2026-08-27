@@ -450,6 +450,115 @@
         fetchFaces();
         refreshS20Status();
         setInterval(refreshS20Status, 15000);
-    </script>
+    
+        // 视觉哨兵逻辑
+        async function fetchSentinelStatus() {
+            try {
+                const res = await fetch('/api/faces/sentinel');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.code === 0 && data.data) {
+                        const conf = data.data;
+                        document.getElementById('sentinelToggle').checked = conf.enabled;
+                        document.getElementById('sentinelCooldown').value = conf.cooldown_minutes || 10;
+                        document.getElementById('sentinelWechat').checked = conf.wechat_notify;
+
+                        const badge = document.getElementById('sentinelStatusBadge');
+                        if (!conf.enabled) {
+                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 flex items-center gap-1';
+                            badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-400"></span> 哨兵已停用';
+                        } else if (conf.status === 'camera_offline') {
+                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 flex items-center gap-1';
+                            badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> S20 手机休眠离线';
+                        } else {
+                            badge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 flex items-center gap-1';
+                            badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 哨兵实时监测中';
+                        }
+
+                        // Render history
+                        const logList = document.getElementById('sentinelLogList');
+                        if (conf.greeting_history && conf.greeting_history.length > 0) {
+                            logList.innerHTML = conf.greeting_history.slice().reverse().map(item => `
+                                <div class="p-2.5 rounded-xl bg-white border border-slate-100 shadow-xs flex items-center justify-between text-xs">
+                                    <div class="flex items-center gap-2 overflow-hidden">
+                                        <span class="w-7 h-7 shrink-0 rounded-full ${item.is_family ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'} flex items-center justify-center font-bold text-xs">
+                                            ${item.name.charAt(0)}
+                                        </span>
+                                        <div class="truncate">
+                                            <span class="font-bold text-slate-800">${item.name}</span>
+                                            <span class="text-[11px] text-slate-500 ml-1">“${item.greeting}”</span>
+                                        </div>
+                                    </div>
+                                    <span class="text-[10px] text-slate-400 shrink-0 ml-2">${item.timestamp.split(' ')[1] || item.timestamp}</span>
+                                </div>
+                            `).join('');
+                        } else {
+                            logList.innerHTML = '<div class="text-xs text-slate-400 p-2">暂无近期迎宾记录，当有人走近摄像头时将自动记录。</div>';
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Fetch sentinel error:', e);
+            }
+        }
+
+        async function toggleSentinel() {
+            const enabled = document.getElementById('sentinelToggle').checked;
+            try {
+                await fetch('/api/faces/sentinel/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled })
+                });
+                fetchSentinelStatus();
+            } catch (e) {}
+        }
+
+        async function updateSentinelConfig() {
+            const cooldown_minutes = parseInt(document.getElementById('sentinelCooldown').value);
+            const wechat_notify = document.getElementById('sentinelWechat').checked;
+            try {
+                await fetch('/api/faces/sentinel/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cooldown_minutes, wechat_notify })
+                });
+                Swal.fire({ icon: 'success', title: '哨兵配置已更新', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+            } catch (e) {}
+        }
+
+        async function triggerTestGreeting() {
+            Swal.fire({
+                title: '模拟测试迎宾中...',
+                text: '正在向小智推送主动迎宾语音与微信通知',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+            try {
+                const res = await fetch('/api/faces/sentinel/trigger_test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: '布布爸爸', is_family: true })
+                });
+                const data = await res.json();
+                if (data.code === 0) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '模拟迎宾触发成功！',
+                        html: `<p class="text-sm text-slate-600 mt-2"><strong>迎宾播报：</strong>${data.data.greeting}</p>`,
+                        confirmButtonText: '确定'
+                    });
+                    fetchSentinelStatus();
+                } else {
+                    Swal.fire({ icon: 'error', title: '触发失败', text: data.msg });
+                }
+            } catch (e) {
+                Swal.fire({ icon: 'error', title: '网络请求错误', text: e.message });
+            }
+        }
+
+        setInterval(fetchSentinelStatus, 3000);
+
+</script>
 </body>
 </html>

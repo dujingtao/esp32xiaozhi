@@ -4,6 +4,7 @@ from config.logger import setup_logging
 from core.api.ota_handler import OTAHandler
 from core.api.vision_handler import VisionHandler
 from core.api.face_handler import FaceWebHandler
+from core.services.face_sentinel import FaceSentinel
 
 TAG = __name__
 
@@ -15,20 +16,11 @@ class SimpleHttpServer:
         self.ota_handler = OTAHandler(config)
         self.vision_handler = VisionHandler(config)
         self.face_handler = FaceWebHandler(config)
+        self.sentinel = FaceSentinel()
 
     def _get_websocket_url(self, local_ip: str, port: int) -> str:
-        """获取websocket地址
-
-        Args:
-            local_ip: 本地IP地址
-            port: 端口号
-
-        Returns:
-            str: websocket地址
-        """
         server_config = self.config["server"]
         websocket_config = server_config.get("websocket")
-
         if websocket_config and "你" not in websocket_config:
             return websocket_config
         else:
@@ -45,35 +37,21 @@ class SimpleHttpServer:
                 app = web.Application()
 
                 if not read_config_from_api:
-                    # 如果没有开启智控台，只是单模块运行，就需要再添加简单OTA接口，用于下发websocket接口
                     app.add_routes(
                         [
                             web.get("/xiaozhi/ota/", self.ota_handler.handle_get),
                             web.post("/xiaozhi/ota/", self.ota_handler.handle_post),
-                            web.options(
-                                "/xiaozhi/ota/", self.ota_handler.handle_options
-                            ),
-                            # 下载接口，仅提供 data/bin/*.bin 下载
-                            web.get(
-                                "/xiaozhi/ota/download/{filename}",
-                                self.ota_handler.handle_download,
-                            ),
-                            web.options(
-                                "/xiaozhi/ota/download/{filename}",
-                                self.ota_handler.handle_options,
-                            ),
+                            web.options("/xiaozhi/ota/", self.ota_handler.handle_options),
+                            web.get("/xiaozhi/ota/download/{filename}", self.ota_handler.handle_download),
+                            web.options("/xiaozhi/ota/download/{filename}", self.ota_handler.handle_options),
                         ]
                     )
                 # 添加路由
                 app.add_routes(
                     [
                         web.get("/mcp/vision/explain", self.vision_handler.handle_get),
-                        web.post(
-                            "/mcp/vision/explain", self.vision_handler.handle_post
-                        ),
-                        web.options(
-                            "/mcp/vision/explain", self.vision_handler.handle_options
-                        ),
+                        web.post("/mcp/vision/explain", self.vision_handler.handle_post),
+                        web.options("/mcp/vision/explain", self.vision_handler.handle_options),
                         # 人脸记忆与视觉中枢管理后台
                         web.get("/faces", self.face_handler.handle_page),
                         web.get("/faces/", self.face_handler.handle_page),
@@ -85,22 +63,24 @@ class SimpleHttpServer:
                         web.post("/api/faces/delete", self.face_handler.handle_delete_face),
                         web.post("/api/faces/recognize", self.face_handler.handle_test_recognize),
                         web.get("/api/faces/s20/status", self.face_handler.handle_s20_status),
-
+                        # 视觉哨兵路由
+                        web.get("/api/faces/sentinel", self.face_handler.handle_sentinel_status),
+                        web.post("/api/faces/sentinel/toggle", self.face_handler.handle_sentinel_toggle),
+                        web.post("/api/faces/sentinel/config", self.face_handler.handle_sentinel_config),
+                        web.post("/api/faces/sentinel/trigger_test", self.face_handler.handle_sentinel_trigger_test),
                     ]
                 )
 
-                # 运行服务
                 runner = web.AppRunner(app)
                 await runner.setup()
                 site = web.TCPSite(runner, host, port)
                 await site.start()
+                self.logger.bind(tag=TAG).info(f"HTTP服务器已启动在 {host}:{port}")
 
-                # 保持服务运行
                 while True:
-                    await asyncio.sleep(3600)  # 每隔 1 小时检查一次
+                    await asyncio.sleep(3600)
         except Exception as e:
             self.logger.bind(tag=TAG).error(f"HTTP服务器启动失败: {e}")
             import traceback
-
             self.logger.bind(tag=TAG).error(f"错误堆栈: {traceback.format_exc()}")
             raise
