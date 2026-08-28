@@ -116,6 +116,7 @@ class ConnectionHandler:
         # 客户端状态相关
         self.client_abort = False
         self.client_is_speaking = False
+        self.social_mode = "active_chat"
         self.client_listen_mode = "auto"
         self.client_aec = False  # 是否启用了服务端AEC
 
@@ -1057,12 +1058,23 @@ class ConnectionHandler:
         # 更新系统prompt至上下文
         self.dialogue.update_system_message(self.prompt)
 
+    async def set_silent_standby(self, note: str = ""):
+        """切换至静默守候模式：停止主动发声，屏幕显示待命标志"""
+        self.social_mode = "silent_standby"
+        self.logger.bind(tag=TAG).info(f"【社交规则】设备进入静默守候状态: {note}")
+        try:
+            from core.handle.sendAudioHandle import send_display_message
+            await send_display_message(self, "🤫 静默守候 (喊小智唤醒)")
+        except Exception as e:
+            self.logger.bind(tag=TAG).warning(f"推送静默守候显示失败: {e}")
+
     def proactive_wake_and_chat(self, proactive_prompt: str):
         """主动唤醒设备并由大模型发起对话，播报完毕后设备自动开启麦克风进入倾听模式"""
         try:
             self.logger.bind(tag=TAG).info(f"主动唤醒并开启对话: {proactive_prompt}")
             self.last_activity_time = time.time() * 1000
             self.client_is_speaking = True
+            self.social_mode = "visual_greeting"
             
             # 发送 tts start 消息让客户端立即切换到 speaking 状态
             if hasattr(self, 'loop') and self.loop and self.loop.is_running():
@@ -1565,6 +1577,7 @@ class ConnectionHandler:
 
     def clearSpeakStatus(self):
         self.client_is_speaking = False
+        self.social_mode = "active_chat"
         self.logger.bind(tag=TAG).debug(f"清除服务端讲话状态")
 
     async def close(self, ws=None):

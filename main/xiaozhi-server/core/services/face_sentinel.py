@@ -53,7 +53,7 @@ class FaceSentinel:
             "enabled": True,
             "camera_url": "http://100.122.149.94:8080/shot.jpg",
             "check_interval": 0.5,
-            "cooldown_minutes": 1,
+            "cooldown_minutes": 20,
             "wechat_notify": True,
             "greet_stranger": True,
             "last_global_greeting_time": 0,
@@ -303,15 +303,15 @@ class FaceSentinel:
             "blurry_unclear": "画面晃动/模糊未看清"
         }.get(quality_status, "访客")
 
-        # ── 构造多模态高情商 Prompt，赋予大模型百变自由创作空间 ──
+        # ── 构造有分寸、懂退让的轻量社交礼仪问候 Prompt ──
         if quality_status == "clear_family":
             cue = (
-                f"【身份确认】：已精准认出眼前是家庭主人【{person_name}】！\n"
-                f"【视觉动作细节】：{visual_desc}。\n"
-                f"【时间线索】：现在是 {now_str}（{weekday_str} {time_period}），{elapsed_desc}。\n"
-                f"【问候指令】：请像极具情商、幽默且体贴的私人管家小智一样，直呼主人的名字【{person_name}】，"
-                f"结合现在的星期、具体时间段、距离上次见面间隔或他的视觉动作，现场创作 1~2 句生动活泼、绝不重复的主动问候语！"
-                f"可以灵活在【生活闲聊/幽默调侃/即时关怀/动作细节互动/主动询问需求】等风格中自由发挥。末尾自然抛出一个互动话题。"
+                f"[主动视觉感知轻量问候]\n"
+                f"【身份确认】：已看到家庭主人【{person_name}】！\n"
+                f"【视觉动作】：{visual_desc}。\n"
+                f"【时间线索】：现在是 {now_str}（{weekday_str} {time_period}）。\n"
+                f"【社交规则指令】：请用极为轻量、自然、温暖的一句话向【{person_name}】问好（严格限制在 1 句话，15字以内，例如：'{person_name}好呀~'、'{person_name}晚上好呀~' 或 '{person_name}还在忙呢~'）。"
+                f"【核心约束】：绝对禁止长篇大论或连珠炮式提问！简短问候后你将安静等待主人的反应。知分寸、不喧宾夺主。"
             )
         elif quality_status == "clear_stranger":
             cue = (

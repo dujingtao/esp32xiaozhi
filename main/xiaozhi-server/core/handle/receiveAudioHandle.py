@@ -87,6 +87,43 @@ async def startToChat(conn: "ConnectionHandler", text):
     if conn.client_is_speaking and conn.client_listen_mode != "manual":
         await handleAbortMessage(conn)
 
+    # ── 智能社交规则状态机逻辑 ──
+    social_mode = getattr(conn, "social_mode", "active_chat")
+    clean_text = actual_text.strip().replace("。", "").replace("，", "").replace("！", "").replace("？", "")
+
+    # 1. 视觉打招呼状态 (VISUAL_GREETING)
+    if social_mode == "visual_greeting":
+        rejection_words = ["不需要", "不用了", "别吵", "去忙吧", "别说话", "安静", "退下", "没事", "不打扰", "不用", "行了", "好的不需要", "没啥事", "去休息吧"]
+        is_rejection = any(rw in clean_text for rw in rejection_words) or len(clean_text) == 0
+        if is_rejection:
+            conn.logger.bind(tag=TAG).info(f"【社交规则】视觉打招呼后用户表示无需互动 ({actual_text})，优雅切入静默守候")
+            await conn.set_silent_standby("主人暂无互动需求")
+            return
+        else:
+            conn.social_mode = "active_chat"
+            conn.logger.bind(tag=TAG).info(f"【社交规则】用户回应了视觉打招呼 ({actual_text})，切换至热情对话模式！")
+
+    # 2. 静默守候状态 (SILENT_STANDBY)
+    elif social_mode == "silent_standby":
+        wake_words = ["小智", "xiaozhi", "小志", "小知", "小治", "智哥", "管家"]
+        has_wake_word = any(w in clean_text.lower() for w in wake_words)
+        
+        if getattr(conn, "just_woken_up", False) or has_wake_word:
+            conn.social_mode = "active_chat"
+            conn.logger.bind(tag=TAG).info(f"【社交规则】检测到唤醒指令 ({actual_text})，解除静默守候，切换至热情对话模式！")
+        else:
+            conn.logger.bind(tag=TAG).info(f"【社交规则】静默守候中监听到背景语音: '{actual_text}'，保持静默，不发声打扰。")
+            if "记一下" in clean_text or "帮我记" in clean_text or "备忘" in clean_text:
+                try:
+                    from plugins_func.functions.user_notepad import record_note
+                    record_note(content=actual_text, category="静默备忘", title="静默监听记录")
+                    conn.logger.bind(tag=TAG).info(f"【社交规则】已悄悄为主人记录静默备忘: {actual_text}")
+                    from core.handle.sendAudioHandle import send_display_message
+                    await send_display_message(conn, "📝 已悄悄记录备忘")
+                except Exception:
+                    pass
+            return
+
     # 首先进行意图分析，使用实际文本内容
     intent_handled = await handle_user_intent(conn, actual_text)
 
