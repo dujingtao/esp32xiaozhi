@@ -27,7 +27,6 @@ def get_audio_info(filepath: str):
         ext = os.path.splitext(filepath)[1].lower()
         filename = os.path.basename(filepath)
         
-        # 解析歌名与歌手（例如 "周杰伦 - 晴天.mp3" 或 "晴天.mp3"）
         title = os.path.splitext(filename)[0]
         artist = "未知歌手"
         if " - " in title:
@@ -56,36 +55,32 @@ def get_audio_info(filepath: str):
 class MusicWebHandler:
     def __init__(self, config: dict):
         self.config = config
+        self.logger = setup_logging()
 
     async def handle_page(self, request):
-        """渲染音乐管理 Web 页面"""
-        html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "music_admin.html")
+        html_path = os.path.join(os.path.dirname(__file__), "music_admin.html")
         if os.path.exists(html_path):
             with open(html_path, "r", encoding="utf-8") as f:
-                return web.Response(text=f.read(), content_type="text/html")
-        return web.Response(text="<h1>Music Admin HTML not found</h1>", content_type="text/html", status=404)
+                content = f.read()
+            return web.Response(text=content, content_type="text/html")
+        return web.Response(text="<h1>Music Admin Page Not Found</h1>", content_type="text/html", status=404)
 
-    async def handle_list(self, request):
-        """获取本地所有音乐列表与统计数据"""
+    async def handle_list_music(self, request):
         try:
             songs = []
             total_size = 0
-            
             if os.path.exists(MUSIC_DIR):
-                for fname in sorted(os.listdir(MUSIC_DIR)):
-                    if fname == "cache" or fname.startswith("."):
-                        continue
-                    full_p = os.path.join(MUSIC_DIR, fname)
-                    if os.path.isfile(full_p):
-                        ext = os.path.splitext(fname)[1].lower()
-                        if ext in SUPPORTED_EXTS:
-                            info = get_audio_info(full_p)
+                for f in sorted(os.listdir(MUSIC_DIR)):
+                    ext = os.path.splitext(f)[1].lower()
+                    if ext in SUPPORTED_EXTS:
+                        fpath = os.path.join(MUSIC_DIR, f)
+                        if os.path.isfile(fpath):
+                            info = get_audio_info(fpath)
                             if info:
                                 songs.append(info)
                                 total_size += info["size"]
 
-            total_size_mb = f"{total_size / (1024 * 1024):.2f} MB"
-            device_online = len(ConnectionRegistry.get_active_connections()) > 0
+            active_conns = list(ConnectionRegistry._connections.keys())
             
             return web.json_response({
                 "code": 0,
@@ -94,174 +89,158 @@ class MusicWebHandler:
                 "data": {
                     "total_count": len(songs),
                     "total_size": total_size,
-                    "total_size_formatted": total_size_mb,
-                    "device_online": device_online,
+                    "total_size_formatted": f"{total_size / (1024 * 1024):.2f} MB",
+                    "device_online": len(active_conns) > 0,
                     "supported_formats": ["MP3", "WAV", "M4A", "FLAC", "AAC", "OGG"],
                     "songs": songs
                 }
             })
         except Exception as e:
-            logger.bind(tag=TAG).error(f"获取音乐列表失败: {e}")
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
 
     async def handle_upload(self, request):
-        """支持单文件或多文件流式上传到 music/ 目录"""
         try:
             reader = await request.multipart()
             uploaded_files = []
-
+            
             while True:
-                part = await reader.next()
-                if part is None:
+                field = await reader.next()
+                if field is None:
                     break
-
-                if part.filename:
-                    raw_filename = part.filename
-                    # 过滤非法字符
-                    safe_filename = os.path.basename(raw_filename).strip()
-                    ext = os.path.splitext(safe_filename)[1].lower()
-
+                if field.name == 'file':
+                    filename = field.filename
+                    if not filename:
+                        continue
+                    ext = os.path.splitext(filename)[1].lower()
                     if ext not in SUPPORTED_EXTS:
                         return web.json_response({
                             "code": 400,
                             "success": False,
-                            "msg": f"不支持的音频格式: {ext}，仅支持 {', '.join(SUPPORTED_EXTS)}"
+                            "msg": f"不支持的文件格式: {ext}，仅支持 MP3, WAV, FLAC, M4A, AAC, OGG"
                         })
-
-                    target_path = os.path.join(MUSIC_DIR, safe_filename)
+                    
+                    target_path = os.path.join(MUSIC_DIR, filename)
+                    base, ext = os.path.splitext(filename)
+                    counter = 1
+                    while os.path.exists(target_path):
+                        filename = f"{base}_{counter}{ext}"
+                        target_path = os.path.join(MUSIC_DIR, filename)
+                        counter += 1
+                        
                     size = 0
-                    with open(target_path, "wb") as f:
+                    with open(target_path, 'wb') as f:
                         while True:
-                            chunk = await part.read_chunk()
+                            chunk = await field.read_chunk()
                             if not chunk:
                                 break
                             size += len(chunk)
                             f.write(chunk)
+                            
+                    logger.bind(tag=TAG).info(f"成功上传音乐: {filename} ({size / (1024*1024):.2f} MB)")
+                    uploaded_files.append(filename)
 
-                    info = get_audio_info(target_path)
-                    uploaded_files.append(info)
-                    logger.bind(tag=TAG).info(f"成功上传音乐: {safe_filename} ({size / 1024 / 1024:.2f} MB)")
-
-            if not uploaded_files:
-                return web.json_response({"code": 400, "success": False, "msg": "未接收到有效音频文件"})
-
-            return web.json_response({
-                "code": 0,
-                "success": True,
-                "msg": f"成功上传 {len(uploaded_files)} 首歌曲",
-                "data": uploaded_files
-            })
+            if uploaded_files:
+                return web.json_response({
+                    "code": 0,
+                    "success": True,
+                    "msg": f"成功上传 {len(uploaded_files)} 首歌曲",
+                    "data": uploaded_files
+                })
+            else:
+                return web.json_response({"code": 400, "success": False, "msg": "未接收到任何文件"})
         except Exception as e:
-            logger.bind(tag=TAG).error(f"音乐上传异常: {e}")
-            return web.json_response({"code": 500, "success": False, "msg": f"上传失败: {e}"})
-
-    async def handle_stream(self, request):
-        """支持 Range 请求的网页音频流预览播放"""
-        raw_filename = request.match_info.get("filename", "")
-        filename = urllib.parse.unquote(raw_filename)
-        safe_filename = os.path.basename(filename)
-        filepath = os.path.join(MUSIC_DIR, safe_filename)
-
-        if not os.path.exists(filepath) or not os.path.isfile(filepath):
-            return web.Response(status=404, text="Music file not found")
-
-        ext = os.path.splitext(safe_filename)[1].lower()
-        content_type_map = {
-            ".mp3": "audio/mpeg",
-            ".wav": "audio/wav",
-            ".m4a": "audio/mp4",
-            ".flac": "audio/flac",
-            ".aac": "audio/aac",
-            ".ogg": "audio/ogg",
-            ".p3": "audio/mpeg"
-        }
-        content_type = content_type_map.get(ext, "application/octet-stream")
-
-        file_size = os.path.getsize(filepath)
-        range_header = request.headers.get("Range")
-
-        if range_header:
-            try:
-                byte_range = range_header.replace("bytes=", "").split("-")
-                start = int(byte_range[0])
-                end = int(byte_range[1]) if byte_range[1] else file_size - 1
-                length = end - start + 1
-
-                with open(filepath, "rb") as f:
-                    f.seek(start)
-                    data = f.read(length)
-
-                headers = {
-                    "Content-Range": f"bytes {start}-{end}/{file_size}",
-                    "Accept-Ranges": "bytes",
-                    "Content-Length": str(length),
-                    "Content-Type": content_type
-                }
-                return web.Response(body=data, status=206, headers=headers)
-            except Exception:
-                pass
-
-        headers = {
-            "Accept-Ranges": "bytes",
-            "Content-Length": str(file_size),
-            "Content-Type": content_type
-        }
-        with open(filepath, "rb") as f:
-            return web.Response(body=f.read(), headers=headers)
+            logger.bind(tag=TAG).error(f"上传音乐异常: {e}")
+            return web.json_response({"code": 500, "success": False, "msg": str(e)})
 
     async def handle_delete(self, request):
-        """删除指定本地音乐"""
         try:
             data = await request.json()
             filename = data.get("filename", "").strip()
             if not filename:
-                return web.json_response({"code": 400, "success": False, "msg": "文件名不能为空"})
-
-            safe_filename = os.path.basename(filename)
-            filepath = os.path.join(MUSIC_DIR, safe_filename)
-
-            if os.path.exists(filepath) and os.path.isfile(filepath):
-                os.remove(filepath)
-                logger.bind(tag=TAG).info(f"已删除音乐文件: {safe_filename}")
-                return web.json_response({"code": 0, "success": True, "msg": f"成功删除歌曲《{safe_filename}》"})
-            else:
+                return web.json_response({"code": 400, "success": False, "msg": "未指定删除文件名"})
+                
+            filepath = os.path.join(MUSIC_DIR, filename)
+            if not os.path.exists(filepath):
                 return web.json_response({"code": 404, "success": False, "msg": "文件不存在"})
+                
+            os.remove(filepath)
+            
+            p3_cache = os.path.join(CACHE_DIR, f"{os.path.splitext(filename)[0]}.p3")
+            if os.path.exists(p3_cache):
+                try:
+                    os.remove(p3_cache)
+                except Exception:
+                    pass
+                    
+            logger.bind(tag=TAG).info(f"成功删除音乐: {filename}")
+            return web.json_response({"code": 0, "success": True, "msg": f"已成功删除歌曲: {filename}"})
         except Exception as e:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
 
+    async def handle_stream(self, request):
+        filename = request.match_info.get("filename", "")
+        filename = urllib.parse.unquote(filename)
+        filepath = os.path.join(MUSIC_DIR, filename)
+        if not os.path.exists(filepath) or not os.path.isfile(filepath):
+            return web.Response(text="Music file not found", status=404)
+
+        ext = os.path.splitext(filename)[1].lower()
+        content_type = "audio/mpeg"
+        if ext == ".wav":
+            content_type = "audio/wav"
+        elif ext == ".flac":
+            content_type = "audio/flac"
+        elif ext in [".m4a", ".aac"]:
+            content_type = "audio/mp4"
+        elif ext == ".ogg":
+            content_type = "audio/ogg"
+
+        response = web.StreamResponse(
+            status=200,
+            headers={
+                "Content-Type": content_type,
+                "Content-Length": str(os.path.getsize(filepath)),
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "public, max-age=86400"
+            }
+        )
+        await response.prepare(request)
+        with open(filepath, "rb") as f:
+            while True:
+                chunk = f.read(64 * 1024)
+                if not chunk:
+                    break
+                await response.write(chunk)
+        return response
+
     async def handle_rename(self, request):
-        """重命名音乐文件（便于语音指令点歌匹配）"""
         try:
             data = await request.json()
             old_name = data.get("old_filename", "").strip()
-            new_title = data.get("new_title", "").strip()
-
-            if not old_name or not new_title:
-                return web.json_response({"code": 400, "success": False, "msg": "参数不完整"})
-
-            safe_old = os.path.basename(old_name)
-            ext = os.path.splitext(safe_old)[1].lower()
-            safe_new = os.path.basename(new_title)
-            if not safe_new.lower().endswith(ext):
-                safe_new += ext
-
-            old_path = os.path.join(MUSIC_DIR, safe_old)
-            new_path = os.path.join(MUSIC_DIR, safe_new)
-
+            new_name = data.get("new_filename", "").strip()
+            if not old_name or not new_name:
+                return web.json_response({"code": 400, "success": False, "msg": "文件名不能为空"})
+                
+            old_path = os.path.join(MUSIC_DIR, old_name)
             if not os.path.exists(old_path):
                 return web.json_response({"code": 404, "success": False, "msg": "原文件不存在"})
-
-            if os.path.exists(new_path) and old_path != new_path:
+                
+            old_ext = os.path.splitext(old_name)[1].lower()
+            new_ext = os.path.splitext(new_name)[1].lower()
+            if not new_ext:
+                new_name = f"{new_name}{old_ext}"
+                
+            new_path = os.path.join(MUSIC_DIR, new_name)
+            if os.path.exists(new_path) and new_path != old_path:
                 return web.json_response({"code": 400, "success": False, "msg": "目标文件名已存在"})
-
+                
             os.rename(old_path, new_path)
-            info = get_audio_info(new_path)
-            logger.bind(tag=TAG).info(f"音乐重命名: {safe_old} -> {safe_new}")
-            return web.json_response({"code": 0, "success": True, "msg": "重命名成功", "data": info})
+            logger.bind(tag=TAG).info(f"重命名音乐: {old_name} -> {new_name}")
+            return web.json_response({"code": 0, "success": True, "msg": f"重命名成功: {new_name}"})
         except Exception as e:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
 
-        async def handle_play_on_device(self, request):
+    async def handle_play_on_device(self, request):
         """一键向在线 ESP32 音箱直接推送播放音频流（零延迟、100%可靠）"""
         try:
             data = await request.json()
@@ -278,7 +257,7 @@ class MusicWebHandler:
             if not os.path.exists(music_file):
                 return web.json_response({"code": 404, "success": False, "msg": f"音乐文件不存在: {filename}"})
 
-            active_conns = [conn for conn in ConnectionRegistry._connections.values()]
+            active_conns = list(ConnectionRegistry._connections.values())
             if not active_conns:
                 return web.json_response({
                     "code": 400,
@@ -336,28 +315,30 @@ class MusicWebHandler:
         except Exception as e:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
 
-async def handle_stop_device(self, request):
+    async def handle_stop_device(self, request):
         """一键打断并停止所有在线 ESP32 音箱的音乐/语音播放"""
         try:
             from core.handle.abortHandle import handleAbortMessage
-            conns = ConnectionRegistry.get_active_connections()
-            if not conns:
-                return web.json_response({"code": 400, "success": False, "msg": "当前没有在线连接的小智设备"})
+            active_conns = list(ConnectionRegistry._connections.values())
+            if not active_conns:
+                return web.json_response({
+                    "code": 400,
+                    "success": False,
+                    "msg": "当前没有在线连接的 ESP32 设备"
+                })
             
-            for conn in conns:
+            stopped_count = 0
+            for conn in active_conns:
                 try:
-                    if hasattr(conn, 'loop') and conn.loop and conn.loop.is_running():
-                        import asyncio
-                        asyncio.run_coroutine_threadsafe(handleAbortMessage(conn), conn.loop)
-                    else:
-                        await handleAbortMessage(conn)
-                except Exception as e:
-                    print(f"[MusicWebHandler] Stop device error: {e}")
-
+                    await handleAbortMessage(conn)
+                    stopped_count += 1
+                except Exception as ce:
+                    logger.bind(tag=TAG).error(f"打断设备播放失败: {ce}")
+                    
             return web.json_response({
                 "code": 0,
                 "success": True,
-                "msg": "已成功向小智音箱发送即时停止指令！"
+                "msg": f"已成功向 {stopped_count} 台在线音箱发送即时停止指令"
             })
         except Exception as e:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
