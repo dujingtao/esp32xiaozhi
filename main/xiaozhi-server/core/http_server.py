@@ -4,6 +4,7 @@ from config.logger import setup_logging
 from core.api.ota_handler import OTAHandler
 from core.api.vision_handler import VisionHandler
 from core.api.face_handler import FaceWebHandler
+from core.api.music_handler import MusicWebHandler
 from core.services.face_sentinel import FaceSentinel
 
 TAG = __name__
@@ -16,6 +17,7 @@ class SimpleHttpServer:
         self.ota_handler = OTAHandler(config)
         self.vision_handler = VisionHandler(config)
         self.face_handler = FaceWebHandler(config)
+        self.music_handler = MusicWebHandler(config)
         self.sentinel = FaceSentinel()
 
     def _get_websocket_url(self, local_ip: str, port: int) -> str:
@@ -68,6 +70,16 @@ class SimpleHttpServer:
                         web.post("/api/faces/sentinel/toggle", self.face_handler.handle_sentinel_toggle),
                         web.post("/api/faces/sentinel/config", self.face_handler.handle_sentinel_config),
                         web.post("/api/faces/sentinel/trigger_test", self.face_handler.handle_sentinel_trigger_test),
+                        # 🎵 本地音乐中枢与曲库管理后台
+                        web.get("/music", self.music_handler.handle_page),
+                        web.get("/music/", self.music_handler.handle_page),
+                        web.get("/music/index.html", self.music_handler.handle_page),
+                        web.get("/api/music/list", self.music_handler.handle_list),
+                        web.post("/api/music/upload", self.music_handler.handle_upload),
+                        web.get("/api/music/stream/{filename}", self.music_handler.handle_stream),
+                        web.post("/api/music/delete", self.music_handler.handle_delete),
+                        web.post("/api/music/rename", self.music_handler.handle_rename),
+                        web.post("/api/music/play_on_device", self.music_handler.handle_play_on_device),
                     ]
                 )
 

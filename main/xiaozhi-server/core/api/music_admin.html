@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小智 AI · 本地音乐中枢与曲库管理</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #090d16 0%, #0f172a 50%, #1e1b4b 100%);
+            min-height: 100vh;
+            color: #f1f5f9;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+        }
+        .glass-card {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card:hover {
+            border-color: rgba(129, 140, 248, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px -10px rgba(99, 102, 241, 0.25);
+        }
+        .vinyl-spin {
+            animation: spin 8s linear infinite;
+        }
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+        .paused-spin {
+            animation-play-state: paused;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="pb-32">
+    <!-- Navbar -->
+    <header class="sticky top-0 z-40 glass-panel border-b border-slate-700/50 px-4 lg:px-8 py-3.5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                <i data-lucide="music" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                    小智 AI · 本地音乐中枢
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">v1.2</span>
+                </h1>
+                <p class="text-xs text-slate-400">XiaoZhi Local Music & Voice Streaming Hub</p>
+            </div>
+        </div>
+
+        <!-- Center Tabs -->
+        <nav class="hidden md:flex items-center gap-1.5 bg-slate-900/60 p-1 rounded-xl border border-slate-800">
+            <a href="/music" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow flex items-center gap-1.5">
+                <i data-lucide="disc-3" class="w-3.5 h-3.5"></i>
+                本地音乐库
+            </a>
+            <a href="/faces" class="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5">
+                <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
+                人脸视觉记忆
+            </a>
+        </nav>
+
+        <!-- Right Device Status -->
+        <div class="flex items-center gap-3">
+            <div id="deviceBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="deviceText">小智音箱 在线</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 lg:px-8 pt-6 space-y-6">
+        <!-- Top Banner / Voice command guide -->
+        <div class="glass-panel rounded-2xl p-5 border border-indigo-500/20 relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div class="space-y-1 z-10">
+                <div class="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider">
+                    <i data-lucide="mic" class="w-4 h-4"></i>
+                    语音点歌指南
+                </div>
+                <h2 class="text-base font-bold text-white">随时对小智说：</h2>
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <span class="px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-200 text-xs flex items-center gap-1.5 cursor-pointer hover:border-indigo-400 transition" onclick="copyVoiceCmd(this)">
+                        <i data-lucide="volume-2" class="w-3 h-3 text-indigo-400"></i>
+                        “小智，播放《一念千年》”
+                    </span>
+                    <span class="px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-200 text-xs flex items-center gap-1.5 cursor-pointer hover:border-indigo-400 transition" onclick="copyVoiceCmd(this)">
+                        <i data-lucide="volume-2" class="w-3 h-3 text-indigo-400"></i>
+                        “播放周杰伦的晴天”
+                    </span>
+                    <span class="px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-200 text-xs flex items-center gap-1.5 cursor-pointer hover:border-indigo-400 transition" onclick="copyVoiceCmd(this)">
+                        <i data-lucide="shuffle" class="w-3 h-3 text-indigo-400"></i>
+                        “放首轻松的音乐 / 随机播放”
+                    </span>
+                </div>
+            </div>
+
+            <!-- Stats Badge -->
+            <div class="flex items-center gap-4 z-10 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 border-slate-800 pt-3 md:pt-0">
+                <div class="text-center px-4 py-2 rounded-xl bg-slate-900/60 border border-slate-800 min-w-[90px]">
+                    <div id="statCount" class="text-xl font-extrabold text-indigo-400">0</div>
+                    <div class="text-[11px] text-slate-400">本地歌曲</div>
+                </div>
+                <div class="text-center px-4 py-2 rounded-xl bg-slate-900/60 border border-slate-800 min-w-[90px]">
+                    <div id="statSize" class="text-xl font-extrabold text-cyan-400">0 MB</div>
+                    <div class="text-[11px] text-slate-400">已用存储</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Dropzone -->
+        <div class="glass-panel rounded-2xl p-6 border-dashed border-2 border-indigo-500/30 hover:border-indigo-500 transition-all text-center relative group cursor-pointer" id="dropzone">
+            <input type="file" id="fileInput" multiple accept=".mp3,.wav,.m4a,.flac,.aac,.ogg" class="hidden" />
+            <div class="flex flex-col items-center justify-center space-y-3 py-4">
+                <div class="w-14 h-14 rounded-2xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-lg shadow-indigo-500/20">
+                    <i data-lucide="cloud-upload" class="w-7 h-7"></i>
+                </div>
+                <div class="space-y-1">
+                    <h3 class="text-base font-bold text-white">点击上传或将歌曲拖拽到此处</h3>
+                    <p class="text-xs text-slate-400">支持 MP3, WAV, M4A, FLAC, AAC, OGG 等高品质格式（支持多文件批量上传）</p>
+                </div>
+                <button type="button" class="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition flex items-center gap-1.5">
+                    <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                    选择本地音频文件
+                </button>
+            </div>
+
+            <!-- Upload Progress Bar -->
+            <div id="uploadProgressContainer" class="hidden mt-4 pt-4 border-t border-slate-800 text-left space-y-2">
+                <div class="flex justify-between text-xs text-slate-300">
+                    <span id="uploadStatusText">正在上传中...</span>
+                    <span id="uploadPercentText" class="font-bold text-indigo-400">0%</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div id="uploadProgressBar" class="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 w-0 transition-all duration-200"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Music Library Section -->
+        <div class="glass-panel rounded-2xl p-6 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <i data-lucide="library" class="w-5 h-5 text-indigo-400"></i>
+                    <h2 class="text-base font-bold text-white">本地音乐曲库</h2>
+                    <span id="badgeCount" class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-medium">0 首</span>
+                </div>
+
+                <!-- Search & Refresh -->
+                <div class="flex items-center gap-2.5 w-full sm:w-auto">
+                    <div class="relative flex-1 sm:w-64">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                        <input type="text" id="searchInput" placeholder="搜索歌曲、歌手或文件名..." class="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700/80 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+                    </div>
+                    <button onclick="fetchMusicList()" class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition" title="刷新列表">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Music Cards Grid -->
+            <div id="musicGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                <!-- Skeleton loader -->
+                <div class="col-span-full py-16 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
+                    <div class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span class="text-xs">正在加载本地曲库...</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Docked Floating Audio Player Bar -->
+    <div id="playerBar" class="fixed bottom-0 left-0 right-0 z-50 glass-panel border-t border-slate-700/60 px-4 lg:px-8 py-3 transform translate-y-0 transition-transform duration-300">
+        <audio id="globalAudio" class="hidden"></audio>
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+            <!-- Left: Current Song Info -->
+            <div class="flex items-center gap-3 min-w-[220px]">
+                <div id="playerVinyl" class="w-12 h-12 rounded-full bg-slate-900 border-2 border-indigo-500/40 flex items-center justify-center shadow-lg relative vinyl-spin paused-spin">
+                    <div class="w-4 h-4 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
+                        <div class="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
+                    </div>
+                </div>
+                <div class="truncate max-w-[180px] sm:max-w-[240px]">
+                    <div id="playerTitle" class="text-sm font-bold text-white truncate">暂未选择歌曲</div>
+                    <div id="playerArtist" class="text-xs text-slate-400 truncate">点击任意歌曲播放</div>
+                </div>
+            </div>
+
+            <!-- Center: Controls & Progress Slider -->
+            <div class="flex-1 max-w-xl w-full flex flex-col items-center gap-1.5">
+                <div class="flex items-center gap-4">
+                    <button onclick="seekRelative(-10)" class="text-slate-400 hover:text-white transition" title="快退10秒">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                    </button>
+                    <button id="playBtn" onclick="togglePlay()" class="w-9 h-9 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-md shadow-indigo-600/40 transition hover:scale-105">
+                        <i data-lucide="play" id="playIcon" class="w-4 h-4 fill-white ml-0.5"></i>
+                    </button>
+                    <button onclick="seekRelative(10)" class="text-slate-400 hover:text-white transition" title="快进10秒">
+                        <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div class="w-full flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+                    <span id="currentTime">00:00</span>
+                    <input type="range" id="progressBar" min="0" max="100" value="0" step="0.1" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                    <span id="totalDuration">00:00</span>
+                </div>
+            </div>
+
+            <!-- Right: Volume & Push to ESP32 -->
+            <div class="flex items-center gap-3">
+                <div class="hidden md:flex items-center gap-2">
+                    <i data-lucide="volume-2" class="w-4 h-4 text-slate-400"></i>
+                    <input type="range" id="volumeBar" min="0" max="1" step="0.05" value="0.8" class="w-20 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                </div>
+                <button id="castBtn" onclick="castCurrentToDevice()" class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-semibold shadow-md shadow-emerald-600/30 transition flex items-center gap-1.5 whitespace-nowrap">
+                    <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                    音箱播放
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename Modal -->
+    <div id="renameModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="glass-panel rounded-2xl p-6 max-w-md w-full border border-slate-700 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i data-lucide="edit-3" class="w-4 h-4 text-indigo-400"></i>
+                    重命名歌曲 / 调整语音点歌名
+                </h3>
+                <button onclick="closeRenameModal()" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-400">
+                可修改为更简短好记的名字，方便对小智音箱直接呼叫点播。
+            </p>
+            <div class="space-y-1">
+                <label class="text-xs font-medium text-slate-300">新歌名 / 文件名</label>
+                <input type="text" id="renameInput" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeRenameModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300">取消</button>
+                <button onclick="confirmRename()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white">确认保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-20 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+    <script>
+        let musicList = [];
+        let currentPlayingSong = null;
+        let renamingFilename = null;
+        const audio = document.getElementById("globalAudio");
+
+        document.addEventListener("DOMContentLoaded", () => {
+            lucide.createIcons();
+            fetchMusicList();
+            setupDropzone();
+            setupAudioEvents();
+        });
+
+        function showToast(msg, type = "success") {
+            const container = document.getElementById("toastContainer");
+            const toast = document.createElement("div");
+            const bgClass = type === "success" ? "bg-emerald-600 text-white" : type === "error" ? "bg-rose-600 text-white" : "bg-indigo-600 text-white";
+            const icon = type === "success" ? "check-circle" : type === "error" ? "alert-circle" : "info";
+
+            toast.className = `px-4 py-3 rounded-xl shadow-xl flex items-center gap-2.5 text-xs font-medium pointer-events-auto transform translate-y-2 opacity-0 transition-all duration-300 ${bgClass}`;
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i><span>${msg}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.classList.remove("translate-y-2", "opacity-0");
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add("opacity-0", "-translate-y-2");
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        async function fetchMusicList() {
+            try {
+                const res = await fetch("/api/music/list");
+                const json = await res.json();
+                if (json.code === 0 && json.data) {
+                    musicList = json.data.songs || [];
+                    document.getElementById("statCount").innerText = json.data.total_count;
+                    document.getElementById("badgeCount").innerText = `${json.data.total_count} 首`;
+                    document.getElementById("statSize").innerText = json.data.total_size_formatted;
+                    
+                    const devBadge = document.getElementById("deviceBadge");
+                    const devText = document.getElementById("deviceText");
+                    if (json.data.device_online) {
+                        devBadge.className = "flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium";
+                        devText.innerText = "小智音箱 在线";
+                    } else {
+                        devBadge.className = "flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-slate-400 text-xs font-medium";
+                        devText.innerText = "小智音箱 离线";
+                    }
+
+                    renderMusicCards(musicList);
+                }
+            } catch (e) {
+                console.error("Fetch music error:", e);
+                showToast("加载音乐列表失败: " + e.message, "error");
+            }
+        }
+
+        function renderMusicCards(songs) {
+            const grid = document.getElementById("musicGrid");
+            if (!songs || songs.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full py-16 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
+                        <i data-lucide="music-2" class="w-12 h-12 text-slate-600"></i>
+                        <span class="text-sm font-medium text-slate-400">曲库暂无本地歌曲</span>
+                        <span class="text-xs text-slate-500">点击上方上传或将音频文件拖拽进来吧！</span>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            grid.innerHTML = songs.map(s => {
+                const isPlaying = currentPlayingSong && currentPlayingSong.filename === s.filename && !audio.paused;
+                return `
+                    <div class="glass-card rounded-2xl p-4 flex flex-col justify-between gap-3 relative group ${isPlaying ? 'border-indigo-500 bg-indigo-950/20' : ''}">
+                        <div class="flex items-start gap-3">
+                            <div onclick="playSong('${s.filename}')" class="w-12 h-12 rounded-xl bg-gradient-to-tr from-slate-800 to-indigo-950/80 border border-slate-700/60 flex items-center justify-center flex-shrink-0 cursor-pointer group-hover:scale-105 transition shadow">
+                                <i data-lucide="${isPlaying ? 'pause' : 'disc-3'}" class="w-6 h-6 ${isPlaying ? 'text-indigo-400 animate-spin' : 'text-slate-400 group-hover:text-indigo-400'}"></i>
+                            </div>
+                            <div class="truncate flex-1">
+                                <h4 class="text-sm font-bold text-white truncate cursor-pointer hover:text-indigo-300" onclick="playSong('${s.filename}')" title="${s.title}">${s.title}</h4>
+                                <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                                    <span class="truncate">${s.artist}</span>
+                                    <span>•</span>
+                                    <span class="px-1.5 py-0.2 rounded bg-slate-800 text-[10px] font-mono text-indigo-300 border border-slate-700">${s.ext}</span>
+                                    <span>•</span>
+                                    <span class="text-[11px]">${s.size_formatted}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
+                            <div class="flex items-center gap-1.5">
+                                <button onclick="playSong('${s.filename}')" class="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white text-xs font-medium transition flex items-center gap-1">
+                                    <i data-lucide="${isPlaying ? 'pause' : 'play'}" class="w-3.5 h-3.5"></i>
+                                    ${isPlaying ? '暂停' : '试听'}
+                                </button>
+                                <button onclick="castToDevice('${s.filename}', '${s.title}')" class="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-600 text-emerald-300 hover:text-white text-xs font-medium transition flex items-center gap-1" title="在小智音箱上立即播放">
+                                    <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                                    音箱播放
+                                </button>
+                            </div>
+
+                            <div class="flex items-center gap-1">
+                                <button onclick="openRenameModal('${s.filename}', '${s.title}')" class="p-1.5 rounded-lg text-slate-400 hover:text-indigo-300 hover:bg-slate-800 transition" title="重命名">
+                                    <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="deleteSong('${s.filename}', '${s.title}')" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition" title="删除">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join("");
+            lucide.createIcons();
+        }
+
+        document.getElementById("searchInput").addEventListener("input", (e) => {
+            const kw = e.target.value.toLowerCase().trim();
+            if (!kw) {
+                renderMusicCards(musicList);
+                return;
+            }
+            const filtered = musicList.filter(s => 
+                s.title.toLowerCase().includes(kw) || 
+                s.artist.toLowerCase().includes(kw) || 
+                s.filename.toLowerCase().includes(kw)
+            );
+            renderMusicCards(filtered);
+        });
+
+        function setupDropzone() {
+            const dropzone = document.getElementById("dropzone");
+            const fileInput = document.getElementById("fileInput");
+
+            dropzone.addEventListener("click", () => fileInput.click());
+
+            dropzone.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                dropzone.classList.add("border-indigo-400", "bg-indigo-950/20");
+            });
+
+            dropzone.addEventListener("dragleave", () => {
+                dropzone.classList.remove("border-indigo-400", "bg-indigo-950/20");
+            });
+
+            dropzone.addEventListener("drop", (e) => {
+                e.preventDefault();
+                dropzone.classList.remove("border-indigo-400", "bg-indigo-950/20");
+                if (e.dataTransfer.files.length > 0) {
+                    uploadFiles(e.dataTransfer.files);
+                }
+            });
+
+            fileInput.addEventListener("change", () => {
+                if (fileInput.files.length > 0) {
+                    uploadFiles(fileInput.files);
+                }
+            });
+        }
+
+        async function uploadFiles(files) {
+            const progressContainer = document.getElementById("uploadProgressContainer");
+            const progressBar = document.getElementById("uploadProgressBar");
+            const progressText = document.getElementById("uploadPercentText");
+            const statusText = document.getElementById("uploadStatusText");
+
+            progressContainer.classList.remove("hidden");
+            statusText.innerText = `正在准备上传 ${files.length} 个音频文件...`;
+            progressBar.style.width = "0%";
+            progressText.innerText = "0%";
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append("files", files[i]);
+            }
+
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", "/api/music/upload", true);
+
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        progressBar.style.width = percent + "%";
+                        progressText.innerText = percent + "%";
+                        statusText.innerText = `正在上传 (${(e.loaded/1024/1024).toFixed(1)}MB / ${(e.total/1024/1024).toFixed(1)}MB)...`;
+                    }
+                };
+
+                xhr.onload = () => {
+                    progressContainer.classList.add("hidden");
+                    if (xhr.status === 200) {
+                        const res = JSON.parse(xhr.responseText);
+                        if (res.code === 0) {
+                            showToast(res.msg || "上传成功！", "success");
+                            fetchMusicList();
+                        } else {
+                            showToast(res.msg || "上传失败", "error");
+                        }
+                    } else {
+                        showToast("上传服务器返回异常", "error");
+                    }
+                };
+
+                xhr.onerror = () => {
+                    progressContainer.classList.add("hidden");
+                    showToast("网络错误，上传失败", "error");
+                };
+
+                xhr.send(formData);
+            } catch (e) {
+                progressContainer.classList.add("hidden");
+                showToast("上传出错: " + e.message, "error");
+            }
+        }
+
+        function setupAudioEvents() {
+            const playBtn = document.getElementById("playBtn");
+            const playIcon = document.getElementById("playIcon");
+            const vinyl = document.getElementById("playerVinyl");
+            const progressBar = document.getElementById("progressBar");
+            const currentTime = document.getElementById("currentTime");
+            const totalDuration = document.getElementById("totalDuration");
+            const volumeBar = document.getElementById("volumeBar");
+
+            audio.addEventListener("play", () => {
+                playIcon.setAttribute("data-lucide", "pause");
+                vinyl.classList.remove("paused-spin");
+                lucide.createIcons();
+                renderMusicCards(musicList);
+            });
+
+            audio.addEventListener("pause", () => {
+                playIcon.setAttribute("data-lucide", "play");
+                vinyl.classList.add("paused-spin");
+                lucide.createIcons();
+                renderMusicCards(musicList);
+            });
+
+            audio.addEventListener("timeupdate", () => {
+                if (!audio.duration) return;
+                const percent = (audio.currentTime / audio.duration) * 100;
+                progressBar.value = percent;
+                currentTime.innerText = formatTime(audio.currentTime);
+            });
+
+            audio.addEventListener("loadedmetadata", () => {
+                totalDuration.innerText = formatTime(audio.duration);
+            });
+
+            progressBar.addEventListener("input", () => {
+                if (audio.duration) {
+                    audio.currentTime = (progressBar.value / 100) * audio.duration;
+                }
+            });
+
+            volumeBar.addEventListener("input", () => {
+                audio.volume = volumeBar.value;
+            });
+        }
+
+        function playSong(filename) {
+            const song = musicList.find(s => s.filename === filename);
+            if (!song) return;
+
+            if (currentPlayingSong && currentPlayingSong.filename === filename) {
+                togglePlay();
+                return;
+            }
+
+            currentPlayingSong = song;
+            document.getElementById("playerTitle").innerText = song.title;
+            document.getElementById("playerArtist").innerText = `${song.artist} • ${song.ext}`;
+            audio.src = song.play_url;
+            audio.play();
+        }
+
+        function togglePlay() {
+            if (!audio.src) {
+                if (musicList.length > 0) {
+                    playSong(musicList[0].filename);
+                }
+                return;
+            }
+            if (audio.paused) {
+                audio.play();
+            } else {
+                audio.pause();
+            }
+        }
+
+        function seekRelative(sec) {
+            if (audio.duration) {
+                audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + sec));
+            }
+        }
+
+        function formatTime(sec) {
+            if (isNaN(sec)) return "00:00";
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+
+        async function castToDevice(filename, title) {
+            try {
+                showToast(`正在向小智音箱推送播放《${title}》...`, "info");
+                const res = await fetch("/api/music/play_on_device", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ filename, title })
+                });
+                const json = await res.json();
+                if (json.code === 0) {
+                    showToast(json.msg, "success");
+                } else {
+                    showToast(json.msg, "error");
+                }
+            } catch (e) {
+                showToast("推送播放失败: " + e.message, "error");
+            }
+        }
+
+        function castCurrentToDevice() {
+            if (!currentPlayingSong) {
+                if (musicList.length > 0) {
+                    castToDevice(musicList[0].filename, musicList[0].title);
+                } else {
+                    showToast("曲库为空，请先上传歌曲", "error");
+                }
+                return;
+            }
+            castToDevice(currentPlayingSong.filename, currentPlayingSong.title);
+        }
+
+        async function deleteSong(filename, title) {
+            if (!confirm(`确定要从本地曲库中删除歌曲《${title}》吗？`)) return;
+
+            try {
+                const res = await fetch("/api/music/delete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ filename })
+                });
+                const json = await res.json();
+                if (json.code === 0) {
+                    showToast(json.msg, "success");
+                    if (currentPlayingSong && currentPlayingSong.filename === filename) {
+                        audio.pause();
+                        audio.src = "";
+                        document.getElementById("playerTitle").innerText = "暂未选择歌曲";
+                        document.getElementById("playerArtist").innerText = "点击任意歌曲播放";
+                    }
+                    fetchMusicList();
+                } else {
+                    showToast(json.msg, "error");
+                }
+            } catch (e) {
+                showToast("删除异常: " + e.message, "error");
+            }
+        }
+
+        function openRenameModal(filename, title) {
+            renamingFilename = filename;
+            document.getElementById("renameInput").value = title;
+            document.getElementById("renameModal").classList.remove("hidden");
+        }
+
+        function closeRenameModal() {
+            document.getElementById("renameModal").classList.add("hidden");
+            renamingFilename = null;
+        }
+
+        async function confirmRename() {
+            const newTitle = document.getElementById("renameInput").value.trim();
+            if (!newTitle) {
+                showToast("歌名不能为空", "error");
+                return;
+            }
+
+            try {
+                const res = await fetch("/api/music/rename", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ old_filename: renamingFilename, new_title: newTitle })
+                });
+                const json = await res.json();
+                if (json.code === 0) {
+                    showToast("重命名成功！", "success");
+                    closeRenameModal();
+                    fetchMusicList();
+                } else {
+                    showToast(json.msg, "error");
+                }
+            } catch (e) {
+                showToast("重命名异常: " + e.message, "error");
+            }
+        }
+
+        function copyVoiceCmd(el) {
+            const text = el.innerText.trim();
+            navigator.clipboard.writeText(text);
+            showToast(`已复制指令：${text}`, "info");
+        }
+    </script>
+</body>
+</html>
