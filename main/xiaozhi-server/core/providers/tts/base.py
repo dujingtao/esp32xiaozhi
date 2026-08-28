@@ -525,14 +525,24 @@ class TTSProviderBase(ABC):
     def _process_audio_file_stream(
         self, tts_file, callback: Callable[[Any], Any]
     ) -> None:
-        """处理音频文件并转换为指定格式
+        """处理音频文件并转换为指定格式，优先采用零CPU原生 .p3 缓存并支持瞬时打断"""
+        p3_cached = os.path.splitext(tts_file)[0] + ".p3"
+        
+        # 若非 .p3 文件但不存在对应 .p3 缓存，快速生成预转码缓存
+        if not tts_file.endswith(".p3") and not os.path.exists(p3_cached):
+            try:
+                p3.encode_audio_to_p3_file(tts_file, p3_cached, sample_rate=self.conn.sample_rate)
+            except Exception as e:
+                logger.bind(tag=TAG).warning(f"预生成 p3 缓存失败: {e}")
 
-        Args:
-            tts_file: 音频文件路径
-            callback: 文件处理函数
-        """
-        if tts_file.endswith(".p3"):
-            p3.decode_opus_from_file_stream(tts_file, callback=callback)
+        target_file = p3_cached if os.path.exists(p3_cached) else tts_file
+
+        if target_file.endswith(".p3"):
+            p3.decode_opus_from_file_stream(
+                target_file,
+                callback=callback,
+                abort_check=lambda: getattr(self.conn, 'client_abort', False)
+            )
         elif self.conn.audio_format == "pcm":
             self.audio_to_pcm_data_stream(tts_file, callback=callback)
         else:

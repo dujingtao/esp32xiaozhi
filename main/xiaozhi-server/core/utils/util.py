@@ -343,7 +343,7 @@ def audio_bytes_to_data_stream(
         pcm_to_data_stream(raw_data, is_opus, callback, sample_rate, opus_encoder)
 
 
-def pcm_to_data_stream(raw_data, is_opus=True, callback: Callable[[Any], Any] = None, sample_rate=16000, opus_encoder=None):
+def pcm_to_data_stream(raw_data, is_opus=True, callback: Callable[[Any], Any] = None, sample_rate=16000, opus_encoder=None, abort_check=None):
     """
     将PCM数据流式编码为Opus或直接输出PCM
 
@@ -365,6 +365,8 @@ def pcm_to_data_stream(raw_data, is_opus=True, callback: Callable[[Any], Any] = 
 
     # 按帧处理所有音频数据（包括最后一帧可能补零）
     for i in range(0, len(raw_data), frame_size * 2):  # 16bit=2bytes/sample
+        if abort_check and abort_check():
+            break
         # 获取当前帧的二进制数据
         chunk = raw_data[i : i + frame_size * 2]
 

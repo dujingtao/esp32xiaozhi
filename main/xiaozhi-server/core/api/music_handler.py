@@ -288,3 +288,28 @@ class MusicWebHandler:
                 })
         except Exception as e:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
+    async def handle_stop_device(self, request):
+        """一键打断并停止所有在线 ESP32 音箱的音乐/语音播放"""
+        try:
+            from core.handle.abortHandle import handleAbortMessage
+            conns = ConnectionRegistry.get_active_connections()
+            if not conns:
+                return web.json_response({"code": 400, "success": False, "msg": "当前没有在线连接的小智设备"})
+            
+            for conn in conns:
+                try:
+                    if hasattr(conn, 'loop') and conn.loop and conn.loop.is_running():
+                        import asyncio
+                        asyncio.run_coroutine_threadsafe(handleAbortMessage(conn), conn.loop)
+                    else:
+                        await handleAbortMessage(conn)
+                except Exception as e:
+                    print(f"[MusicWebHandler] Stop device error: {e}")
+
+            return web.json_response({
+                "code": 0,
+                "success": True,
+                "msg": "已成功向小智音箱发送即时停止指令！"
+            })
+        except Exception as e:
+            return web.json_response({"code": 500, "success": False, "msg": str(e)})

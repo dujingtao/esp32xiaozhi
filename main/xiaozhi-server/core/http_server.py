@@ -80,6 +80,7 @@ class SimpleHttpServer:
                         web.post("/api/music/delete", self.music_handler.handle_delete),
                         web.post("/api/music/rename", self.music_handler.handle_rename),
                         web.post("/api/music/play_on_device", self.music_handler.handle_play_on_device),
+                        web.post("/api/music/stop_device", self.music_handler.handle_stop_device),
                     ]
                 )
 

@@ -26,7 +26,23 @@
                     <p class="text-xs text-slate-500">多模态视觉档案与 S20 协同管理系统</p>
                 </div>
             </div>
+            <!-- Navigation Links -->
+            <nav class="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <a href="/faces" class="px-3.5 py-1 rounded-lg text-xs font-semibold bg-white text-indigo-600 shadow-sm flex items-center gap-1.5">
+                    <i class="fa-solid fa-id-card"></i>
+                    人脸记忆库
+                </a>
+                <a href="/music" class="px-3.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-music"></i>
+                    本地音乐库
+                </a>
+            </nav>
+
             <div class="flex items-center space-x-3">
+                <button onclick="stopSpeakerDevice()" class="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 transition active:scale-95" title="立即让小智音箱停止播放">
+                    <i class="fa-solid fa-stop"></i>
+                    <span>⏹️ 停止音箱</span>
+                </button>
                 <div id="s20-status-badge" class="flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
                     <span class="w-2 h-2 rounded-full bg-amber-400 mr-2 animate-pulse"></span>
                     检测 S20 手机状态中...
@@ -450,6 +466,20 @@
         fetchFaces();
         refreshS20Status();
         setInterval(refreshS20Status, 15000);
+        async function stopSpeakerDevice() {
+            try {
+                const res = await fetch('/api/music/stop_device', { method: 'POST' });
+                const d = await res.json();
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: d.success ? 'success' : 'info',
+                    title: d.msg || '已发送停止指令',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+            } catch(e) { console.error(e); }
+        }
     </script>
 </body>
 </html>
