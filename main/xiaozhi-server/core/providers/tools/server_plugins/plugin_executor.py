@@ -106,8 +106,8 @@ class ServerPluginExecutor(ToolExecutor):
         # 将模块级别的插件名展开为具体函数名（兜底机制）
         config_functions = self._expand_plugin_names(config_functions)
 
-        # 合并所有需要的函数
-        all_required_functions = list(set(necessary_functions + config_functions))
+        # 合并所有需要的函数以及所有已注册的服务端插件
+        all_required_functions = list(set(necessary_functions + config_functions + list(all_function_registry.keys())))
 
         for func_name in all_required_functions:
             func_item = all_function_registry.get(func_name)
