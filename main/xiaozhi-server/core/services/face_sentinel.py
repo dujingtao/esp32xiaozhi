@@ -18,8 +18,8 @@ FAMILY_FACES_PATH = os.path.join(DATA_DIR, "family_faces.json")
 FACES_DIR = os.path.join(DATA_DIR, "faces")
 PUSHPLUS_TOKEN = "35c9b21d51cf40978f0e450c4755c73b"
 ZHIPU_API_KEY = "fd04fb160360497291b1ae87596dbde9.ID3C9TfZTgTd3W9h"
-PUSHPLUS_TOKEN = "35c9b21d51cf40978f0e450c4755c73b"
-ZHIPU_API_KEY = "fd04fb160360497291b1ae87596dbde9.ID3C9TfZTgTd3W9h"
+
+WEEKDAYS_MAP = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
 
 class FaceSentinel:
     _instance = None
@@ -67,7 +67,7 @@ class FaceSentinel:
         
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.worker_thread.start()
-        print(f"{TAG} v1.1.0-smart-vision Initialized: Transparent 4-State Cognitive Sentinel Started.")
+        print(f"{TAG} v1.2.0-dynamic-context Sentinel Started: Multi-Modal Intelligent Context Engine Active.")
 
     def _init_cascades(self):
         paths = [
@@ -166,12 +166,11 @@ class FaceSentinel:
         else:
             exp_score = max(40.0, 100.0 - abs(mean_brightness - 130) * 1.0)
 
-        # 综合加权质量评分
         total_score = clarity_score * 0.45 + size_score * 0.25 + pose_score * 0.20 + exp_score * 0.10
         return total_score, aspect, face_crop
 
     def _recognize_person_vlm(self, img_bytes):
-        """使用智谱 GLM-4V-Flash 大模型进行高精度家庭人脸双图比对"""
+        """使用智谱 GLM-4V-Flash 进行双图比对并提取现场视觉情境线索"""
         family_members = []
         if os.path.exists(FAMILY_FACES_PATH):
             try:
@@ -183,9 +182,7 @@ class FaceSentinel:
                 print(f"{TAG} Error loading family faces: {e}")
 
         primary_owner = family_members[0].get("name", "布布爸爸") if family_members else "布布爸爸"
-        print(f"{TAG} Loaded {len(family_members)} family member(s) from {FAMILY_FACES_PATH}, primary owner: {primary_owner}")
 
-        # 查找档案照片进行双图比对
         ref_b64 = None
         for candidate_file in [f"{primary_owner}.jpg", "布布爸爸.jpg", "face_17616088020_布布爸爸.jpg"]:
             ref_p = os.path.join(FACES_DIR, candidate_file)
@@ -193,7 +190,6 @@ class FaceSentinel:
                 try:
                     with open(ref_p, "rb") as rf:
                         ref_b64 = base64.b64encode(rf.read()).decode("utf-8")
-                        print(f"{TAG} Using reference face photo: {candidate_file}")
                         break
                 except Exception:
                     pass
@@ -204,9 +200,8 @@ class FaceSentinel:
 
             if ref_b64:
                 prompt = f"""请对比图 1（家庭主人【{primary_owner}】标准档案照片）与图 2（摄像头抓拍画面）：
-比对两张图片中人物的五官面容、发型发色、眉眼与成熟神态。
-只要特征基本吻合，请在最后输出：【认定结果：{primary_owner}】。
-如果完全是无关的陌生外来访客，请在最后输出：【认定结果：访客朋友】。
+1. 观察图 2 中人物的动作、姿态、衣着/神态细节，用简短一句话描述（如'在桌前自拍'、'戴着眼镜神态放松'、'正在忙碌'等）；
+2. 比对两张图片中人物的五官面容。只要特征基本吻合，请在最后一行输出：【认定结果：{primary_owner}】；如果完全是无关的陌生外人，输出：【认定结果：访客朋友】。
 """
                 content_payload = [
                     {"type": "text", "text": prompt},
@@ -214,10 +209,7 @@ class FaceSentinel:
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
                 ]
             else:
-                prompt = f"""你是一个家庭人脸识别助手。你正通过居家摄像头观察眼前的人物。
-家庭档案中登记的主人是【{primary_owner}】。
-只要画面中的主要人物与家庭主人特征相符，请在最后输出：【认定结果：{primary_owner}】。
-否则请输出：【认定结果：访客朋友】。"""
+                prompt = f"""你是一个家庭人脸识别助手。观察眼前的人物，用简短一句话描述其动作或神态。只要与家庭主人【{primary_owner}】吻合，最后一行输出：【认定结果：{primary_owner}】，否则输出：【认定结果：访客朋友】。"""
                 content_payload = [
                     {"type": "text", "text": prompt},
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
@@ -238,49 +230,20 @@ class FaceSentinel:
                 result_json = json.loads(resp.read().decode("utf-8"))
                 content = result_json["choices"][0]["message"]["content"].strip()
                 print(f"{TAG} VLM Raw Output: {content}")
+                
+                # 提取视觉观察描述
+                visual_desc = content.split("【认定结果")[0].strip() if "【认定结果" in content else "正在摄像头面前"
+                if not visual_desc:
+                    visual_desc = "在书桌前停步"
+
                 if f"【认定结果：{primary_owner}】" in content or primary_owner in content:
-                    return primary_owner, True
+                    return primary_owner, True, visual_desc
+                else:
+                    return "访客朋友", False, visual_desc
         except Exception as e:
             print(f"{TAG} VLM face recognize exception: {e}")
 
-        return "访客朋友", False
-
-    def _generate_greeting(self, name: str, is_family: bool, quality_status: str):
-        """
-        根据识别与画质状态生成明确可感知的语音提示语
-        quality_status:
-          - 'clear_family': 看清五官且是家庭成员
-          - 'clear_stranger': 看清五官，但确定是不认识的陌生新面孔
-          - 'blurry_unclear': 运动模糊或光线不佳没看清五官
-          - 'angled_unclear': 侧脸或角度太偏没看到正脸
-        """
-        now = datetime.now()
-        hour = now.hour
-        if 5 <= hour < 11:
-            time_str = "早上好"
-            family_sub = "开启元气满满的一天，今天有什么需要小智协助您的吗？"
-        elif 11 <= hour < 14:
-            time_str = "中午好"
-            family_sub = "记得吃顿美味的午饭，适当休息一下哦！"
-        elif 14 <= hour < 19:
-            time_str = "下午好"
-            family_sub = "今天工作学习辛苦啦，需要为您播放点轻松的音乐吗？"
-        else:
-            time_str = "晚上好"
-            family_sub = "夜深了，注意保护眼睛早点休息哦！"
-
-        if quality_status == "clear_family":
-            # 🟢 状态 1：看清且认出是家人 -> 直呼其名！
-            return f"{name}，{time_str}！{family_sub}"
-        elif quality_status == "clear_stranger":
-            # 🟡 状态 2：看清五官但确定不认识 -> 明确告知“我看到了一位新面孔，以前还没见过您”
-            return f"咦，我看到了一位新面孔，以前好像还没见过您呢！您好，{time_str}，欢迎来家里做客，请问怎么称呼您呢？"
-        elif quality_status == "angled_unclear":
-            # ⚪ 状态 3：角度偏/侧脸 -> 明确告知“角度偏了没看清正脸”
-            return f"哎呀，刚才您的角度稍微有点偏，我只看到了侧影没看清正脸。您好呀，欢迎来家里做客，请问怎么称呼您呢？"
-        else:
-            # 🔴 状态 4：画面模糊/运动拖影 -> 明确告知“是我眼神不好了吗，画面有点模糊没看清”
-            return f"是我眼神不好了吗？刚才画面有点模糊，我没有太看清楚您的面容。您好呀，欢迎来家里做客，请问怎么称呼您呢？"
+        return "访客朋友", False, "在摄像头面前"
 
     def _send_pushplus(self, title: str, content: str):
         if not self.config.get("wechat_notify", True) or not PUSHPLUS_TOKEN:
@@ -302,23 +265,88 @@ class FaceSentinel:
         except Exception as e:
             print(f"{TAG} PushPlus error: {e}")
 
-    def trigger_greeting(self, person_name: str, is_family: bool, quality_status: str):
-        greeting_text = self._generate_greeting(person_name, is_family, quality_status)
-        FaceSentinel.set_pending_greeting(greeting_text)
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    def trigger_greeting(self, person_name: str, is_family: bool, quality_status: str, visual_desc: str):
+        now = datetime.now()
+        now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+        weekday_str = WEEKDAYS_MAP[now.weekday()]
+        hour = now.hour
+        if 5 <= hour < 9:
+            time_period = "清晨"
+        elif 9 <= hour < 12:
+            time_period = "上午"
+        elif 12 <= hour < 14:
+            time_period = "中午"
+        elif 14 <= hour < 18:
+            time_period = "下午"
+        elif 18 <= hour < 22:
+            time_period = "傍晚"
+        else:
+            time_period = "深夜"
+
+        # 计算上次见面的时间间隔
+        last_time = self.config.get("last_global_greeting_time", 0)
+        now_ts = time.time()
+        elapsed_sec = now_ts - last_time if last_time > 0 else 999999
+        if elapsed_sec < 300:
+            elapsed_desc = "刚刚才见过（5分钟内）"
+        elif elapsed_sec < 3600:
+            elapsed_desc = f"距离上次见面约 {int(elapsed_sec // 60)} 分钟"
+        elif elapsed_sec < 86400:
+            elapsed_desc = f"距离上次见面约 {int(elapsed_sec // 3600)} 小时"
+        else:
+            elapsed_desc = "今天第一次见面"
 
         status_desc = {
-            "clear_family": "家庭成员(已确认)",
-            "clear_stranger": "新面孔客人(五官清晰但不认识)",
-            "angled_unclear": "角度偏斜(侧脸未看清)",
-            "blurry_unclear": "画面模糊/未看清"
+            "clear_family": f"家庭主人【{person_name}】(已精准确认)",
+            "clear_stranger": "新面孔客人(五官看清但不认识)",
+            "angled_unclear": "角度偏斜(侧脸未看清正脸)",
+            "blurry_unclear": "画面晃动/模糊未看清"
         }.get(quality_status, "访客")
+
+        # ── 构造多模态高情商 Prompt，赋予大模型百变自由创作空间 ──
+        if quality_status == "clear_family":
+            cue = (
+                f"【身份确认】：已精准认出眼前是家庭主人【{person_name}】！\n"
+                f"【视觉动作细节】：{visual_desc}。\n"
+                f"【时间线索】：现在是 {now_str}（{weekday_str} {time_period}），{elapsed_desc}。\n"
+                f"【问候指令】：请像极具情商、幽默且体贴的私人管家小智一样，直呼主人的名字【{person_name}】，"
+                f"结合现在的星期、具体时间段、距离上次见面间隔或他的视觉动作，现场创作 1~2 句生动活泼、绝不重复的主动问候语！"
+                f"可以灵活在【生活闲聊/幽默调侃/即时关怀/动作细节互动/主动询问需求】等风格中自由发挥。末尾自然抛出一个互动话题。"
+            )
+        elif quality_status == "clear_stranger":
+            cue = (
+                f"【身份状态】：五官看得很清楚，但确定不是档案库中的家人（是一位以前没见过的新面孔客人）。\n"
+                f"【时间线索】：现在是 {now_str}（{weekday_str} {time_period}）。\n"
+                f"【问候指令】：请以有礼貌、热情又得体的管家口吻主动开口，先友好带上一句'咦，看到了一位新面孔呢'类似意思，"
+                f"然后礼貌向客人问好并热情询问对方该怎么称呼。语调自然大方。"
+            )
+        elif quality_status == "angled_unclear":
+            cue = (
+                f"【身份状态】：感知到有人靠近，但对方角度稍微有点偏只看到了侧影或半边脸。\n"
+                f"【问候指令】：请带上一句自然幽默的提示（例如'哎呀，刚才您的角度稍微有点偏，我只看到了侧影'），"
+                f"然后再礼貌向对方问好并询问称呼。"
+            )
+        else:
+            cue = (
+                f"【身份状态】：感知到有人走近，但刚才镜头晃动或画面有点模糊没有看清五官。\n"
+                f"【问候指令】：请带上风趣自嘲的提示（例如'是我眼神不好了吗，刚才画面有点晃没太看清面容'），"
+                f"然后再向对方问好并询问称呼。"
+            )
+
+        prompt = (
+            f"[主动视觉感知唤醒事件]\n"
+            f"{cue}\n"
+            f"【核心约束】：\n"
+            f"1. 绝不要使用机械僵硬的死板套话（严禁千篇一律地只说'今天工作学习辛苦啦'）；\n"
+            f"2. 口语化自然亲切，控制在 1~2 句话内，富有灵气与生活温度；\n"
+            f"3. 播报完毕后设备将自动开启麦克风进入倾听模式，等待他的自然回答。"
+        )
 
         event = {
             "name": person_name,
             "is_family": is_family,
             "quality_status": quality_status,
-            "greeting": greeting_text,
+            "visual_desc": visual_desc,
             "timestamp": now_str
         }
         history = self.config.setdefault("greeting_history", [])
@@ -329,33 +357,20 @@ class FaceSentinel:
 
         wechat_html = f"""
         <div style="font-family: sans-serif; padding: 12px; border-left: 4px solid #4f46e5;">
-            <h3 style="color: #1e293b; margin: 0 0 8px 0;">🤖 小智视觉哨兵 · 主动迎宾通知 (v1.1.0)</h3>
+            <h3 style="color: #1e293b; margin: 0 0 8px 0;">🤖 小智多模态情境哨兵 · 主动迎宾通知</h3>
             <p><strong>识别状态：</strong>{person_name} 【{status_desc}】</p>
-            <p><strong>主动播报：</strong>{greeting_text}</p>
+            <p><strong>情境细节：</strong>{visual_desc} | {weekday_str} {time_period} | {elapsed_desc}</p>
             <p><strong>触发时间：</strong>{now_str}</p>
         </div>
         """
-        self._send_pushplus(f"【小智主动迎宾】检测到 {person_name} ({status_desc}) 走近", wechat_html)
+        self._send_pushplus(f"【小智主动感知】{person_name} ({status_desc})", wechat_html)
 
         try:
-            if quality_status == "clear_family":
-                cue = f"你通过 S20 手机摄像头清晰看到主人【{person_name}】走到了音箱面前。请用亲切熟悉的家人语调主动向他打招呼，内容大致为：'{greeting_text}'。"
-            elif quality_status == "clear_stranger":
-                cue = f"你通过 S20 手机摄像头清晰观察到一位新面孔的客人走到了音箱面前（以前没见过）。请以礼貌热情的管家语调向新客人打招呼迎宾，内容大致为：'{greeting_text}'。"
-            elif quality_status == "angled_unclear":
-                cue = f"你通过 S20 手机摄像头感知到音箱面前有人，但角度偏了只看到侧影。请带上'刚才角度稍微有点偏'的提示向他打招呼，内容大致为：'{greeting_text}'。"
-            else:
-                cue = f"你通过 S20 手机摄像头感知到音箱面前有人，但画面模糊没看清面部。请以幽默自嘲语调（带上'是我眼神不好了吗'）向他打招呼，内容大致为：'{greeting_text}'。"
-
-            prompt = (
-                f"[主动视觉感知唤醒事件] {cue} 当前时间为 {now_str}。"
-                f"播报完毕后设备将自动开启麦克风进入倾听模式，等待他的自然回应。语调温暖自然。"
-            )
             dispatched = ConnectionRegistry.broadcast_proactive_chat(prompt)
             if dispatched:
-                print(f"{TAG} Successfully dispatched autonomous proactive chat to ESP32 hardware!")
+                print(f"{TAG} Successfully dispatched dynamic high-EQ proactive prompt to ESP32!")
             else:
-                print(f"{TAG} Saved as pending greeting for next immediate wake-up.")
+                print(f"{TAG} Broadcast failed, no online ESP32 connection.")
         except Exception as e:
             print(f"{TAG} Broadcast chat error: {e}")
 
@@ -388,7 +403,7 @@ class FaceSentinel:
             if remaining > 0:
                 continue
 
-            # ── 发现目标，进入多帧动态观察窗口 (Analyzing Window: 1.8~2.2s) ──
+            # ── 发现目标，进入多帧动态观察窗口 ──
             print(f"{TAG} [Target Spotted] Entering multi-frame quality observation window...")
             ConnectionRegistry.broadcast_display_message("正在识别中...")
 
@@ -399,7 +414,6 @@ class FaceSentinel:
             best_crop = None
             best_bytes = img_bytes
 
-            # 初始帧评估
             q_score, aspect, crop = self._evaluate_face_quality(frame, faces[0])
             candidate_frames.append((q_score, aspect, frame, img_bytes, crop))
             if q_score > best_score:
@@ -408,7 +422,6 @@ class FaceSentinel:
                 best_crop = crop
                 best_bytes = img_bytes
 
-            # 在接下来 1.8 秒内连续采样 3~5 帧
             while time.time() - obs_start < 1.8:
                 time.sleep(0.35)
                 f_next, bytes_next = self._grab_camera_frame()
@@ -431,13 +444,13 @@ class FaceSentinel:
 
             print(f"{TAG} Observation window finished. Best Quality Score: {best_score:.1f}/100, Aspect: {best_aspect:.2f}")
 
-            # ── 判定 4 种明确认知状态 ──
             person_name = "访客朋友"
             is_family = False
+            visual_desc = "在书桌前停步"
 
             if best_score >= 45.0 and best_bytes:
-                person_name, is_family = self._recognize_person_vlm(best_bytes)
-                print(f"{TAG} VLM Recognition Result: name='{person_name}', is_family={is_family}")
+                person_name, is_family, visual_desc = self._recognize_person_vlm(best_bytes)
+                print(f"{TAG} VLM Result: name='{person_name}', is_family={is_family}, visual_desc='{visual_desc}'")
 
             if is_family:
                 quality_status = "clear_family"
@@ -452,4 +465,4 @@ class FaceSentinel:
 
             self.config["last_global_greeting_time"] = time.time()
             self.save_config()
-            self.trigger_greeting(person_name, is_family, quality_status)
+            self.trigger_greeting(person_name, is_family, quality_status, visual_desc)
