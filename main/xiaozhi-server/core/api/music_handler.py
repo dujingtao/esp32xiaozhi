@@ -65,6 +65,9 @@ class MusicWebHandler:
             return web.Response(text=content, content_type="text/html")
         return web.Response(text="<h1>Music Admin Page Not Found</h1>", content_type="text/html", status=404)
 
+    async def handle_list(self, request):
+        return await self.handle_list_music(request)
+
     async def handle_list_music(self, request):
         try:
             songs = []
