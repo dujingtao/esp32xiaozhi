@@ -396,7 +396,7 @@ class FaceSentinel:
                 continue
 
             # 检查全局冷却
-            cooldown_sec = self.config.get("cooldown_minutes", 1) * 60
+            cooldown_sec = max(15, self.config.get("cooldown_minutes", 20)) * 60
             now_ts = time.time()
             last_global = self.config.get("last_global_greeting_time", 0)
             remaining = max(0, int(cooldown_sec - (now_ts - last_global)))
