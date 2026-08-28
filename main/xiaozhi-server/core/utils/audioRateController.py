@@ -115,25 +115,19 @@ class AudioRateController:
 
                 _, opus_packet = item
 
-                # 循环等待直到时间到达
+                # 保持 400ms 的安全前置余量（Lead Headroom），彻底消除网络/调度抖动造成的音频微卡顿
                 while True:
-                    # 计算时间差
                     elapsed_ms = self._get_elapsed_ms()
-                    output_ms = self.play_position
+                    target_ms = max(0, self.play_position - 400)
 
-                    if elapsed_ms < output_ms:
-                        # 还不到发送时间，计算等待时长
-                        wait_ms = output_ms - elapsed_ms
-
-                        # 等待后继续检查（允许被中断）
+                    if elapsed_ms < target_ms:
+                        wait_ms = target_ms - elapsed_ms
                         try:
                             await asyncio.sleep(wait_ms / 1000)
                         except asyncio.CancelledError:
                             self.logger.bind(tag=TAG).debug("音频发送任务被取消")
                             raise
-                        # 等待结束后重新检查时间（循环回到 while True）
                     else:
-                        # 时间已到，跳出等待循环
                         break
 
                 # 时间已到，从队列移除并发送
