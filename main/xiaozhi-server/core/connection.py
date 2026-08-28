@@ -1062,6 +1062,12 @@ class ConnectionHandler:
         try:
             self.logger.bind(tag=TAG).info(f"主动唤醒并开启对话: {proactive_prompt}")
             self.last_activity_time = time.time() * 1000
+            self.client_is_speaking = True
+            
+            # 发送 tts start 消息让客户端立即切换到 speaking 状态
+            if hasattr(self, 'loop') and self.loop and self.loop.is_running():
+                from core.handle.sendAudioHandle import send_tts_message
+                asyncio.run_coroutine_threadsafe(send_tts_message(self, "start"), self.loop)
             
             # 必须使用 executor 线程池运行 chat，避免阻塞 asyncio 事件循环导致 run_coroutine_threadsafe 死锁
             if hasattr(self, 'executor') and self.executor:

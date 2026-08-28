@@ -530,7 +530,11 @@ void Application::InitializeProtocol() {
     });
 
     protocol_->OnIncomingAudio([this](std::unique_ptr<AudioStreamPacket> packet) {
-        if (GetDeviceState() == kDeviceStateSpeaking) {
+        auto state = GetDeviceState();
+        if (state == kDeviceStateSpeaking || state == kDeviceStateIdle) {
+            if (state == kDeviceStateIdle) {
+                Schedule([this]() { SetDeviceState(kDeviceStateSpeaking); });
+            }
             audio_service_.PushPacketToDecodeQueue(std::move(packet));
         }
     });
@@ -590,8 +594,12 @@ void Application::InitializeProtocol() {
                         glyphs.clear();
                     }
                     ESP_LOGI(TAG, "<< %s", text->valuestring);
-                    Schedule([display, message = std::string(text->valuestring),
+                    Schedule([this, display, message = std::string(text->valuestring),
                               glyphs = std::move(glyphs), bpp]() {
+                        if (GetDeviceState() != kDeviceStateSpeaking) {
+                            aborted_ = false;
+                            SetDeviceState(kDeviceStateSpeaking);
+                        }
                         display->AddTextGlyphs(glyphs, bpp);
                         display->SetChatMessage("assistant", message.c_str());
                     });

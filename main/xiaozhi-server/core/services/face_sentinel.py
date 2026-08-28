@@ -47,7 +47,7 @@ class FaceSentinel:
             "enabled": True,
             "camera_url": "http://100.122.149.94:8080/shot.jpg",
             "check_interval": 2.5,
-            "cooldown_minutes": 5,
+            "cooldown_minutes": 1,
             "wechat_notify": True,
             "greet_stranger": True,
             "last_global_greeting_time": 0,
@@ -133,9 +133,9 @@ class FaceSentinel:
             small_gray = cv2.resize(gray, (0, 0), fx=0.5, fy=0.5)
             faces = self.face_cascade.detectMultiScale(
                 small_gray,
-                scaleFactor=1.15,
-                minNeighbors=5,
-                minSize=(40, 40)
+                scaleFactor=1.1,
+                minNeighbors=3,
+                minSize=(30, 30)
             )
             return [(x*2, y*2, w*2, h*2) for (x, y, w, h) in faces]
         except Exception:
@@ -259,13 +259,14 @@ class FaceSentinel:
 
             self.status = "monitoring"
             faces = self._detect_faces(frame)
-            if len(faces) > 0:
-                cooldown_sec = self.config.get("cooldown_minutes", 5) * 60
-                now_ts = time.time()
-                last_global = self.config.get("last_global_greeting_time", 0)
+            cooldown_sec = self.config.get("cooldown_minutes", 1) * 60
+            now_ts = time.time()
+            last_global = self.config.get("last_global_greeting_time", 0)
+            remaining = max(0, int(cooldown_sec - (now_ts - last_global)))
 
-                # 全局防骚扰冷却
-                if now_ts - last_global < cooldown_sec:
+            if len(faces) > 0:
+                print(f"{TAG} Frame check: {len(faces)} face(s) found. Cooldown remaining: {remaining}s")
+                if remaining > 0:
                     continue
 
                 person_name, is_family = self._recognize_person(frame, img_bytes)
