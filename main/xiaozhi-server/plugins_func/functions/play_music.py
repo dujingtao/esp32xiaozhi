@@ -34,7 +34,7 @@ play_music_function_desc = {
     "type": "function",
     "function": {
         "name": "play_music",
-        "description": "当用户要求播放音乐、歌曲时调用此工具。",
+        "description": "【播放音乐首选工具】当用户要求播放音乐、点歌、放歌、听歌、播放本地歌曲或音频时必须调用此工具。",
         "parameters": {
             "type": "object",
             "properties": {

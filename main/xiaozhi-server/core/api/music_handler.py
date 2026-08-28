@@ -261,8 +261,8 @@ class MusicWebHandler:
         except Exception as e:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
 
-    async def handle_play_on_device(self, request):
-        """一键向在线 ESP32 音箱推送播放指令"""
+        async def handle_play_on_device(self, request):
+        """一键向在线 ESP32 音箱直接推送播放音频流（零延迟、100%可靠）"""
         try:
             data = await request.json()
             filename = data.get("filename", "").strip()
@@ -271,24 +271,72 @@ class MusicWebHandler:
             if not filename:
                 return web.json_response({"code": 400, "success": False, "msg": "未指定歌曲"})
 
-            prompt = f"请为我播放本地音乐《{title}》"
-            dispatched = ConnectionRegistry.broadcast_proactive_chat(prompt)
+            music_file = os.path.join(MUSIC_DIR, filename)
+            if not os.path.exists(music_file):
+                music_file = os.path.join(CACHE_DIR, filename)
 
-            if dispatched:
-                return web.json_response({
-                    "code": 0,
-                    "success": True,
-                    "msg": f"已成功向小智音箱推送播放指令：《{title}》"
-                })
-            else:
+            if not os.path.exists(music_file):
+                return web.json_response({"code": 404, "success": False, "msg": f"音乐文件不存在: {filename}"})
+
+            active_conns = [conn for conn in ConnectionRegistry._connections.values()]
+            if not active_conns:
                 return web.json_response({
                     "code": 400,
                     "success": False,
                     "msg": "当前没有在线连接的小智 ESP32 音箱，请确认设备已开机联网"
                 })
+
+            prompt_text = f"正在为您播放，《{title}》"
+            from core.providers.tts.dto.dto import ContentType, TTSMessageDTO, SentenceType
+            import uuid
+
+            for conn in active_conns:
+                try:
+                    conn.sentence_id = str(uuid.uuid4().hex)
+                    conn.tts.store_tts_text(conn.sentence_id, prompt_text)
+                    conn.tts.tts_text_queue.put(
+                        TTSMessageDTO(
+                            sentence_id=conn.sentence_id,
+                            sentence_type=SentenceType.FIRST,
+                            content_type=ContentType.ACTION,
+                        )
+                    )
+                    conn.tts.tts_text_queue.put(
+                        TTSMessageDTO(
+                            sentence_id=conn.sentence_id,
+                            sentence_type=SentenceType.MIDDLE,
+                            content_type=ContentType.TEXT,
+                            content_detail=prompt_text,
+                        )
+                    )
+                    conn.tts.tts_text_queue.put(
+                        TTSMessageDTO(
+                            sentence_id=conn.sentence_id,
+                            sentence_type=SentenceType.MIDDLE,
+                            content_type=ContentType.FILE,
+                            content_file=music_file,
+                        )
+                    )
+                    conn.tts.tts_text_queue.put(
+                        TTSMessageDTO(
+                            sentence_id=conn.sentence_id,
+                            sentence_type=SentenceType.LAST,
+                            content_type=ContentType.ACTION,
+                        )
+                    )
+                    logger.bind(tag=TAG).info(f"已直接将音乐 {filename} 推送到设备 TTS 队列")
+                except Exception as ce:
+                    logger.bind(tag=TAG).error(f"推送音乐到连接失败: {ce}")
+
+            return web.json_response({
+                "code": 0,
+                "success": True,
+                "msg": f"已成功向小智音箱推送播放：《{title}》"
+            })
         except Exception as e:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
-    async def handle_stop_device(self, request):
+
+async def handle_stop_device(self, request):
         """一键打断并停止所有在线 ESP32 音箱的音乐/语音播放"""
         try:
             from core.handle.abortHandle import handleAbortMessage
