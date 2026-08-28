@@ -14,7 +14,6 @@ TAG = "[FaceSentinel]"
 
 CONFIG_PATH = "/app/data/sentinel_config.json"
 FAMILY_FACES_PATH = "/app/data/family_faces.json"
-CASCADE_PATH = "/app/data/models/haarcascade_frontalface_default.xml"
 PUSHPLUS_TOKEN = "35c9b21d51cf40978f0e450c4755c73b"
 ZHIPU_API_KEY = "fd04fb160360497291b1ae87596dbde9.ID3C9TfZTgTd3W9h"
 
@@ -59,22 +58,27 @@ class FaceSentinel:
         self.load_config()
         self.status = "idle"
         self.last_check_time = 0
-        self.face_cascade = None
-        self._init_cascade()
+        self.cascades = []
+        self._init_cascades()
         
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.worker_thread.start()
-        print(f"{TAG} v1.1.0-smart-vision Initialized: Continuous Quality Assessment & 3-Tier Sentinel Started.")
+        print(f"{TAG} v1.1.0-smart-vision Initialized: Transparent 4-State Cognitive Sentinel Started.")
 
-    def _init_cascade(self):
-        try:
-            if os.path.exists(CASCADE_PATH):
-                self.face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
-                print(f"{TAG} Loaded Haar Cascade from {CASCADE_PATH}")
-            else:
-                print(f"{TAG} Cascade XML not found at {CASCADE_PATH}")
-        except Exception as e:
-            print(f"{TAG} Failed to load cascade: {e}")
+    def _init_cascades(self):
+        paths = [
+            "/usr/local/lib/python3.10/site-packages/cv2/data/haarcascade_frontalface_alt2.xml",
+            "/usr/local/lib/python3.10/site-packages/cv2/data/haarcascade_profileface.xml",
+            "/app/data/models/haarcascade_frontalface_default.xml"
+        ]
+        for p in paths:
+            if os.path.exists(p):
+                try:
+                    c = cv2.CascadeClassifier(p)
+                    self.cascades.append(c)
+                    print(f"{TAG} Loaded Cascade from {p}")
+                except Exception as e:
+                    print(f"{TAG} Cascade load error for {p}: {e}")
 
     def load_config(self):
         if os.path.exists(CONFIG_PATH):
@@ -108,49 +112,48 @@ class FaceSentinel:
         return None, None
 
     def _detect_faces(self, frame):
-        if frame is None or self.face_cascade is None:
+        if frame is None or not self.cascades:
             return []
         try:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            small_gray = cv2.resize(gray, (0, 0), fx=0.5, fy=0.5)
-            faces = self.face_cascade.detectMultiScale(
-                small_gray,
-                scaleFactor=1.1,
-                minNeighbors=3,
-                minSize=(30, 30)
-            )
-            return [(x*2, y*2, w*2, h*2) for (x, y, w, h) in faces]
-        except Exception:
+            faces = []
+            for c in self.cascades:
+                dets = c.detectMultiScale(gray, scaleFactor=1.08, minNeighbors=2, minSize=(40, 40))
+                for f in dets:
+                    if f[2] >= 45 and f[3] >= 45:
+                        faces.append((int(f[0]), int(f[1]), int(f[2]), int(f[3])))
+            return faces
+        except Exception as e:
+            print(f"{TAG} _detect_faces error: {e}")
             return []
 
     def _evaluate_face_quality(self, frame, face_box):
-        """评估人脸清晰度、尺寸和角度对称度，给出 0~100 的综合画质分"""
+        """评估人脸清晰度、尺寸和角度对称度，给出 0~100 的综合画质分与长宽比"""
         if frame is None or face_box is None:
-            return 0.0, None
+            return 0.0, 1.0, None
         x, y, w, h = face_box
         H, W, _ = frame.shape
-        # 边界安全保护
         x1, y1 = max(0, x), max(0, y)
         x2, y2 = min(W, x + w), min(H, y + h)
         if x2 <= x1 or y2 <= y1 or w < 30 or h < 30:
-            return 0.0, None
+            return 0.0, 1.0, None
 
         face_crop = frame[y1:y2, x1:x2]
         gray = cv2.cvtColor(face_crop, cv2.COLOR_BGR2GRAY)
 
         # 1. 拉普拉斯清晰度算子 (Laplacian Variance)
         laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-        clarity_score = min(100.0, (laplacian_var / 120.0) * 100.0)
+        clarity_score = min(100.0, (laplacian_var / 90.0) * 100.0)
 
         # 2. 尺寸与分辨率打分
-        size_score = min(100.0, (w * h) / (120.0 * 120.0) * 100.0)
+        size_score = min(100.0, (w * h) / (100.0 * 100.0) * 100.0)
 
         # 3. 正脸比例规整度 (Aspect Ratio)
         aspect = float(w) / float(h)
         if 0.75 <= aspect <= 1.15:
             pose_score = 100.0
         else:
-            pose_score = max(30.0, 100.0 - abs(aspect - 0.95) * 150.0)
+            pose_score = max(20.0, 100.0 - abs(aspect - 0.95) * 160.0)
 
         # 4. 曝光适度 (Mean Brightness)
         mean_brightness = np.mean(gray)
@@ -161,7 +164,7 @@ class FaceSentinel:
 
         # 综合加权质量评分
         total_score = clarity_score * 0.45 + size_score * 0.25 + pose_score * 0.20 + exp_score * 0.10
-        return total_score, face_crop
+        return total_score, aspect, face_crop
 
     def _recognize_person_vlm(self, img_bytes):
         """使用智谱 GLM-4V-Flash 大模型进行高精度家庭人脸比对"""
@@ -175,9 +178,7 @@ class FaceSentinel:
             except Exception:
                 pass
 
-        if not family_members:
-            return "访客朋友", False
-
+        primary_owner = family_members[0].get("name", "布布爸爸") if family_members else "布布爸爸"
         members_desc = []
         for m in family_members:
             name = m.get("name", "")
@@ -185,12 +186,13 @@ class FaceSentinel:
             feat = m.get("features", "")
             members_desc.append(f"- 姓名：【{name}】，身份：{role}，特征描述：{feat}")
 
-        prompt = f"""你是一个家庭人脸识别助手。请仔细观察这张手机摄像头拍摄的画面，判断画面正中央最主要的人物是谁。
-家庭人脸库信息如下：
-{chr(10).join(members_desc)}
+        prompt = f"""你是一个家庭人脸识别助手。你正通过居家摄像头观察眼前的人物。
+家庭档案中登记的主人/家人是：
+{chr(10).join(members_desc) if members_desc else f'- 姓名：【{primary_owner}】，身份：主人'}
 
+居家日常场景下（如在家中休闲、自拍、工作或生活），只要画面中的主要人物与家庭主人/家人特征相符，请判定为【{primary_owner}】。
 请严格按以下 JSON 格式返回结果（不要包含 Markdown 代码块或额外说明）：
-{{"recognized": true或false, "name": "若确认为库中家人则写其姓名，否则写'访客朋友'", "confidence": 0.0到1.0}}
+{{"recognized": true或false, "name": "若确认为【{primary_owner}】或其他库中家人则写其姓名，确为完全无关的陌生外人则写'访客朋友'", "confidence": 0.0到1.0}}
 """
         try:
             b64_img = base64.b64encode(img_bytes).decode("utf-8")
@@ -207,7 +209,7 @@ class FaceSentinel:
                     }
                 ],
                 "temperature": 0.1,
-                "max_tokens": 100
+                "max_tokens": 120
             }
             req = urllib.request.Request(
                 url,
@@ -227,7 +229,15 @@ class FaceSentinel:
 
         return "访客朋友", False
 
-    def _generate_greeting(self, name: str, is_family: bool, quality_clear: bool):
+    def _generate_greeting(self, name: str, is_family: bool, quality_status: str):
+        """
+        根据识别与画质状态生成明确可感知的语音提示语
+        quality_status:
+          - 'clear_family': 看清五官且是家庭成员
+          - 'clear_stranger': 看清五官，但确定是不认识的陌生新面孔
+          - 'blurry_unclear': 运动模糊或光线不佳没看清五官
+          - 'angled_unclear': 侧脸或角度太偏没看到正脸
+        """
         now = datetime.now()
         hour = now.hour
         if 5 <= hour < 11:
@@ -243,15 +253,18 @@ class FaceSentinel:
             time_str = "晚上好"
             family_sub = "夜深了，注意保护眼睛早点休息哦！"
 
-        if is_family and quality_clear:
-            # 🟢 Tier 1: 看清五官且属于家庭成员
+        if quality_status == "clear_family":
+            # 🟢 状态 1：看清且认出是家人 -> 直呼其名！
             return f"{name}，{time_str}！{family_sub}"
-        elif quality_clear:
-            # 🟡 Tier 2: 看清五官但不在库中（明确是新客人）
-            return f"您好，{time_str}！欢迎来家里做客，请问怎么称呼您呢？"
+        elif quality_status == "clear_stranger":
+            # 🟡 状态 2：看清五官但确定不认识 -> 明确告知“我看到了一位新面孔，以前还没见过您”
+            return f"咦，我看到了一位新面孔，以前好像还没见过您呢！您好，{time_str}，欢迎来家里做客，请问怎么称呼您呢？"
+        elif quality_status == "angled_unclear":
+            # ⚪ 状态 3：角度偏/侧脸 -> 明确告知“角度偏了没看清正脸”
+            return f"哎呀，刚才您的角度稍微有点偏，我只看到了侧影没看清正脸。您好呀，欢迎来家里做客，请问怎么称呼您呢？"
         else:
-            # 🔴 Tier 3: 一直未看清面部特征（移动模糊/角度不佳/侧脸）
-            return f"是我眼神不好了吗？刚刚没有太看清楚您的面容。您好呀，欢迎来家里做客，请问怎么称呼您呢？"
+            # 🔴 状态 4：画面模糊/运动拖影 -> 明确告知“是我眼神不好了吗，画面有点模糊没看清”
+            return f"是我眼神不好了吗？刚才画面有点模糊，我没有太看清楚您的面容。您好呀，欢迎来家里做客，请问怎么称呼您呢？"
 
     def _send_pushplus(self, title: str, content: str):
         if not self.config.get("wechat_notify", True) or not PUSHPLUS_TOKEN:
@@ -273,16 +286,22 @@ class FaceSentinel:
         except Exception as e:
             print(f"{TAG} PushPlus error: {e}")
 
-    def trigger_greeting(self, person_name: str, is_family: bool, quality_clear: bool):
-        greeting_text = self._generate_greeting(person_name, is_family, quality_clear)
+    def trigger_greeting(self, person_name: str, is_family: bool, quality_status: str):
+        greeting_text = self._generate_greeting(person_name, is_family, quality_status)
         FaceSentinel.set_pending_greeting(greeting_text)
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        status_tag = "家庭成员" if is_family else ("新客人(已看清)" if quality_clear else "访客(未完全看清)")
+        status_desc = {
+            "clear_family": "家庭成员(已确认)",
+            "clear_stranger": "新面孔客人(五官清晰但不认识)",
+            "angled_unclear": "角度偏斜(侧脸未看清)",
+            "blurry_unclear": "画面模糊/未看清"
+        }.get(quality_status, "访客")
+
         event = {
             "name": person_name,
             "is_family": is_family,
-            "quality_clear": quality_clear,
+            "quality_status": quality_status,
             "greeting": greeting_text,
             "timestamp": now_str
         }
@@ -295,21 +314,22 @@ class FaceSentinel:
         wechat_html = f"""
         <div style="font-family: sans-serif; padding: 12px; border-left: 4px solid #4f46e5;">
             <h3 style="color: #1e293b; margin: 0 0 8px 0;">🤖 小智视觉哨兵 · 主动迎宾通知 (v1.1.0)</h3>
-            <p><strong>识别结果：</strong>{person_name} ({status_tag})</p>
-            <p><strong>画质状态：</strong>{'清晰正脸已锁定' if quality_clear else '模糊/侧脸容错'}</p>
+            <p><strong>识别状态：</strong>{person_name} 【{status_desc}】</p>
             <p><strong>主动播报：</strong>{greeting_text}</p>
             <p><strong>触发时间：</strong>{now_str}</p>
         </div>
         """
-        self._send_pushplus(f"【小智主动迎宾】检测到 {person_name} ({status_tag}) 走近", wechat_html)
+        self._send_pushplus(f"【小智主动迎宾】检测到 {person_name} ({status_desc}) 走近", wechat_html)
 
         try:
-            if is_family and quality_clear:
-                cue = f"你通过 S20 手机摄像头清晰看到【{person_name}】走到了音箱面前。请用亲切熟悉的家人语调主动向他打招呼，内容大致为：'{greeting_text}'。"
-            elif quality_clear:
-                cue = f"你通过 S20 手机摄像头观察到一位新的客人走到了音箱面前。请以礼貌热情的管家语调向客人打招呼迎宾，内容大致为：'{greeting_text}'。"
+            if quality_status == "clear_family":
+                cue = f"你通过 S20 手机摄像头清晰看到主人【{person_name}】走到了音箱面前。请用亲切熟悉的家人语调主动向他打招呼，内容大致为：'{greeting_text}'。"
+            elif quality_status == "clear_stranger":
+                cue = f"你通过 S20 手机摄像头清晰观察到一位新面孔的客人走到了音箱面前（以前没见过）。请以礼貌热情的管家语调向新客人打招呼迎宾，内容大致为：'{greeting_text}'。"
+            elif quality_status == "angled_unclear":
+                cue = f"你通过 S20 手机摄像头感知到音箱面前有人，但角度偏了只看到侧影。请带上'刚才角度稍微有点偏'的提示向他打招呼，内容大致为：'{greeting_text}'。"
             else:
-                cue = f"你通过 S20 手机摄像头感知到音箱面前有人，但画面有些模糊或者角度偏了没太看清面部。请以幽默谦逊的语调（带上'是我眼神不好了吗'）向他打招呼，内容大致为：'{greeting_text}'。"
+                cue = f"你通过 S20 手机摄像头感知到音箱面前有人，但画面模糊没看清面部。请以幽默自嘲语调（带上'是我眼神不好了吗'）向他打招呼，内容大致为：'{greeting_text}'。"
 
             prompt = (
                 f"[主动视觉感知唤醒事件] {cue} 当前时间为 {now_str}。"
@@ -350,25 +370,25 @@ class FaceSentinel:
             last_global = self.config.get("last_global_greeting_time", 0)
             remaining = max(0, int(cooldown_sec - (now_ts - last_global)))
             if remaining > 0:
-                print(f"{TAG} Face detected but in cooldown ({remaining}s remaining)")
                 continue
 
             # ── 发现目标，进入多帧动态观察窗口 (Analyzing Window: 1.8~2.2s) ──
             print(f"{TAG} [Target Spotted] Entering multi-frame quality observation window...")
-            # 立即向 ESP32 屏幕广播“正在识别中...”
             ConnectionRegistry.broadcast_display_message("正在识别中...")
 
             candidate_frames = []
             obs_start = time.time()
             best_score = 0.0
+            best_aspect = 1.0
             best_crop = None
             best_bytes = img_bytes
 
             # 初始帧评估
-            q_score, crop = self._evaluate_face_quality(frame, faces[0])
-            candidate_frames.append((q_score, frame, img_bytes, crop))
+            q_score, aspect, crop = self._evaluate_face_quality(frame, faces[0])
+            candidate_frames.append((q_score, aspect, frame, img_bytes, crop))
             if q_score > best_score:
                 best_score = q_score
+                best_aspect = aspect
                 best_crop = crop
                 best_bytes = img_bytes
 
@@ -380,36 +400,40 @@ class FaceSentinel:
                     continue
                 next_faces = self._detect_faces(f_next)
                 if len(next_faces) > 0:
-                    score_next, crop_next = self._evaluate_face_quality(f_next, next_faces[0])
-                    print(f"{TAG} Sampling frame: Face Quality Score = {score_next:.1f}/100")
-                    candidate_frames.append((score_next, f_next, bytes_next, crop_next))
+                    score_next, aspect_next, crop_next = self._evaluate_face_quality(f_next, next_faces[0])
+                    print(f"{TAG} Sampling frame: Face Quality Score = {score_next:.1f}/100, Aspect={aspect_next:.2f}")
+                    candidate_frames.append((score_next, aspect_next, f_next, bytes_next, crop_next))
                     if score_next > best_score:
                         best_score = score_next
+                        best_aspect = aspect_next
                         best_crop = crop_next
                         best_bytes = bytes_next
 
-                    # 遇到超高画质正脸（>=85 分），快速锁定无需多等
-                    if score_next >= 85.0:
-                        print(f"{TAG} High-confidence clear face captured ({score_next:.1f} pts), fast locking!")
+                    if score_next >= 85.0 and 0.75 <= aspect_next <= 1.15:
+                        print(f"{TAG} High-confidence clear frontal face captured ({score_next:.1f} pts), fast locking!")
                         break
 
-            print(f"{TAG} Observation window finished. Best Face Quality Score: {best_score:.1f}/100")
+            print(f"{TAG} Observation window finished. Best Quality Score: {best_score:.1f}/100, Aspect: {best_aspect:.2f}")
 
-            # ── 判断是否看清五官 ──
-            quality_clear = (best_score >= 50.0)  # 50分以上视为看清五官
+            # ── 判定 4 种明确认知状态 ──
             person_name = "访客朋友"
             is_family = False
 
-            if quality_clear and best_bytes:
-                # 送入 VLM 模型高精度认人
+            if best_score >= 45.0 and best_bytes:
                 person_name, is_family = self._recognize_person_vlm(best_bytes)
-                print(f"{TAG} VLM Recognition Result: name='{person_name}', is_family={is_family}, quality_clear=True")
+                print(f"{TAG} VLM Recognition Result: name='{person_name}', is_family={is_family}")
+
+            if is_family:
+                quality_status = "clear_family"
+            elif best_score >= 45.0 and 0.70 <= best_aspect <= 1.25:
+                quality_status = "clear_stranger"
+            elif best_aspect < 0.70 or best_aspect > 1.25:
+                quality_status = "angled_unclear"
             else:
-                print(f"{TAG} Face quality insufficient or blurry (score {best_score:.1f}), triggering Tier-3 unclear greeting.")
-                person_name = "访客朋友"
-                is_family = False
-                quality_clear = False
+                quality_status = "blurry_unclear"
+
+            print(f"{TAG} Final Cognitive Status: {quality_status} for {person_name}")
 
             self.config["last_global_greeting_time"] = time.time()
             self.save_config()
-            self.trigger_greeting(person_name, is_family, quality_clear)
+            self.trigger_greeting(person_name, is_family, quality_status)
