@@ -1,4 +1,5 @@
 import threading
+import asyncio
 from typing import Dict, Any
 
 TAG = "[ConnectionRegistry]"
@@ -24,6 +25,21 @@ class ConnectionRegistry:
     def get_active_connections(cls):
         with cls._lock:
             return list(cls._connections.values())
+
+    @classmethod
+    def broadcast_display_message(cls, text: str):
+        """向所有在线 ESP32 设备发送纯文本屏幕显示（如'正在识别中...'）"""
+        conns = cls.get_active_connections()
+        if not conns:
+            return False
+        from core.handle.sendAudioHandle import send_display_message
+        for handler in conns:
+            try:
+                if hasattr(handler, 'loop') and handler.loop and handler.loop.is_running():
+                    asyncio.run_coroutine_threadsafe(send_display_message(handler, text), handler.loop)
+            except Exception as e:
+                print(f"{TAG} broadcast_display_message error: {e}")
+        return True
 
     @classmethod
     def broadcast_proactive_chat(cls, prompt: str):
