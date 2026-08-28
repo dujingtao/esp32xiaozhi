@@ -12,8 +12,12 @@ from core.utils.connection_registry import ConnectionRegistry
 
 TAG = "[FaceSentinel]"
 
-CONFIG_PATH = "/app/data/sentinel_config.json"
-FAMILY_FACES_PATH = "/app/data/family_faces.json"
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+CONFIG_PATH = os.path.join(DATA_DIR, "sentinel_config.json")
+FAMILY_FACES_PATH = os.path.join(DATA_DIR, "family_faces.json")
+FACES_DIR = os.path.join(DATA_DIR, "faces")
+PUSHPLUS_TOKEN = "35c9b21d51cf40978f0e450c4755c73b"
+ZHIPU_API_KEY = "fd04fb160360497291b1ae87596dbde9.ID3C9TfZTgTd3W9h"
 PUSHPLUS_TOKEN = "35c9b21d51cf40978f0e450c4755c73b"
 ZHIPU_API_KEY = "fd04fb160360497291b1ae87596dbde9.ID3C9TfZTgTd3W9h"
 
@@ -167,7 +171,7 @@ class FaceSentinel:
         return total_score, aspect, face_crop
 
     def _recognize_person_vlm(self, img_bytes):
-        """使用智谱 GLM-4V-Flash 大模型进行高精度家庭人脸比对"""
+        """使用智谱 GLM-4V-Flash 大模型进行高精度家庭人脸双图比对"""
         family_members = []
         if os.path.exists(FAMILY_FACES_PATH):
             try:
@@ -175,55 +179,67 @@ class FaceSentinel:
                     data = json.load(f)
                     if isinstance(data, list): family_members = data
                     elif isinstance(data, dict): family_members = list(data.values())
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"{TAG} Error loading family faces: {e}")
 
         primary_owner = family_members[0].get("name", "布布爸爸") if family_members else "布布爸爸"
-        members_desc = []
-        for m in family_members:
-            name = m.get("name", "")
-            role = m.get("role", "家人")
-            feat = m.get("features", "")
-            members_desc.append(f"- 姓名：【{name}】，身份：{role}，特征描述：{feat}")
+        print(f"{TAG} Loaded {len(family_members)} family member(s) from {FAMILY_FACES_PATH}, primary owner: {primary_owner}")
 
-        prompt = f"""你是一个家庭人脸识别助手。你正通过居家摄像头观察眼前的人物。
-家庭档案中登记的主人/家人是：
-{chr(10).join(members_desc) if members_desc else f'- 姓名：【{primary_owner}】，身份：主人'}
+        # 查找档案照片进行双图比对
+        ref_b64 = None
+        for candidate_file in [f"{primary_owner}.jpg", "布布爸爸.jpg", "face_17616088020_布布爸爸.jpg"]:
+            ref_p = os.path.join(FACES_DIR, candidate_file)
+            if os.path.exists(ref_p):
+                try:
+                    with open(ref_p, "rb") as rf:
+                        ref_b64 = base64.b64encode(rf.read()).decode("utf-8")
+                        print(f"{TAG} Using reference face photo: {candidate_file}")
+                        break
+                except Exception:
+                    pass
 
-居家日常场景下（如在家中休闲、自拍、工作或生活），只要画面中的主要人物与家庭主人/家人特征相符，请判定为【{primary_owner}】。
-请严格按以下 JSON 格式返回结果（不要包含 Markdown 代码块或额外说明）：
-{{"recognized": true或false, "name": "若确认为【{primary_owner}】或其他库中家人则写其姓名，确为完全无关的陌生外人则写'访客朋友'", "confidence": 0.0到1.0}}
-"""
         try:
             b64_img = base64.b64encode(img_bytes).decode("utf-8")
             url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+
+            if ref_b64:
+                prompt = f"""请对比图 1（家庭主人【{primary_owner}】标准档案照片）与图 2（摄像头抓拍画面）：
+比对两张图片中人物的五官面容、发型发色、眉眼与成熟神态。
+只要特征基本吻合，请在最后输出：【认定结果：{primary_owner}】。
+如果完全是无关的陌生外来访客，请在最后输出：【认定结果：访客朋友】。
+"""
+                content_payload = [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{ref_b64}"}},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
+                ]
+            else:
+                prompt = f"""你是一个家庭人脸识别助手。你正通过居家摄像头观察眼前的人物。
+家庭档案中登记的主人是【{primary_owner}】。
+只要画面中的主要人物与家庭主人特征相符，请在最后输出：【认定结果：{primary_owner}】。
+否则请输出：【认定结果：访客朋友】。"""
+                content_payload = [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
+                ]
+
             payload = {
                 "model": "glm-4v-flash",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
-                        ]
-                    }
-                ],
+                "messages": [{"role": "user", "content": content_payload}],
                 "temperature": 0.1,
-                "max_tokens": 120
+                "max_tokens": 150
             }
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
                 headers={"Content-Type": "application/json", "Authorization": f"Bearer {ZHIPU_API_KEY}"}
             )
-            with urllib.request.urlopen(req, timeout=4.0) as resp:
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
                 result_json = json.loads(resp.read().decode("utf-8"))
                 content = result_json["choices"][0]["message"]["content"].strip()
-                if "{" in content and "}" in content:
-                    content = content[content.find("{"):content.rfind("}")+1]
-                data = json.loads(content)
-                if data.get("recognized", False) and data.get("name") and data.get("name") != "访客朋友":
-                    return data["name"], True
+                print(f"{TAG} VLM Raw Output: {content}")
+                if f"【认定结果：{primary_owner}】" in content or primary_owner in content:
+                    return primary_owner, True
         except Exception as e:
             print(f"{TAG} VLM face recognize exception: {e}")
 
