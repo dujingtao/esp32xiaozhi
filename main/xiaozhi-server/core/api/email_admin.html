@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小智 AI 邮件与通讯录中枢</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-primary: #090d16;
+            --bg-secondary: #131b2e;
+            --bg-card: rgba(19, 27, 46, 0.7);
+            --border: rgba(255, 255, 255, 0.08);
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --accent-glow: rgba(99, 102, 241, 0.25);
+            --danger: #ef4444;
+            --success: #10b981;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.12) 0%, transparent 35%),
+                radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 35%);
+        }
+
+        header {
+            border-bottom: 1px solid var(--border);
+            background: rgba(9, 13, 22, 0.8);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        .logo-text h1 { font-size: 18px; font-weight: 700; }
+        .logo-text p { font-size: 11px; color: var(--text-secondary); }
+
+        .nav-links { display: flex; gap: 12px; }
+        .nav-btn {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .nav-btn:hover, .nav-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        main {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 32px 24px;
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 900px) {
+            main { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+        }
+
+        .form-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .input-box {
+            flex: 1;
+            padding: 10px 14px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-box:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+        }
+
+        .btn-primary {
+            padding: 10px 18px;
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        .contact-list, .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 480px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .contact-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s;
+        }
+        .contact-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .contact-info h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+        .contact-info p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-family: monospace;
+        }
+
+        .btn-delete {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .btn-delete:hover {
+            color: var(--danger);
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .history-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .history-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .history-to {
+            font-size: 12px;
+            color: var(--accent);
+            font-weight: 600;
+            font-family: monospace;
+        }
+        .history-time {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .history-subject {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .history-snippet {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .voice-tip {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 14px;
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .voice-tip i { font-size: 24px; color: #818cf8; }
+        .voice-tip-text h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; color: #c7d2fe; }
+        .voice-tip-text p { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="nav-container">
+            <a href="#" class="logo-box">
+                <div class="logo-icon"><i class="fa-solid fa-envelope-open-text"></i></div>
+                <div class="logo-text">
+                    <h1>小智邮件 & 通讯录中枢</h1>
+                    <p>Microsoft 365 Exchange Online Agent</p>
+                </div>
+            </a>
+            <div class="nav-links">
+                <a href="/email" class="nav-btn active"><i class="fa-solid fa-address-book"></i> 通讯录</a>
+                <a href="/music" class="nav-btn"><i class="fa-solid fa-music"></i> 音乐</a>
+                <a href="/faces" class="nav-btn"><i class="fa-solid fa-user-gear"></i> 人脸档案</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="voice-tip">
+            <i class="fa-solid fa-microphone-lines"></i>
+            <div class="voice-tip-text">
+                <h4>🎙️ 支持语音与网页双向管理通讯录与发信</h4>
+                <p>
+                    • 对小智说：<i>“记住张总的邮箱是 zhang@company.com”</i> $\rightarrow$ 自动新增联系人<br>
+                    • 对小智说：<i>“给张总发邮件，说下周一准时参会”</i> $\rightarrow$ 自动匹配通讯录并发信<br>
+                    • 对小智说：<i>“用摄像头拍一张照片发给我”</i> $\rightarrow$ 实时高清抓拍并投递到邮箱
+                </p>
+            </div>
+        </div>
+
+        <!-- 联系人卡片 -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i class="fa-solid fa-users" style="color: var(--accent);"></i> 常用联系人通讯录</div>
+                <span id="contactCount" style="font-size: 12px; color: var(--text-muted);">0 个联系人</span>
+            </div>
+
+            <!-- 新增联系人 -->
+            <form id="addContactForm" class="form-group" onsubmit="saveContact(event)">
+                <input type="text" id="inputName" class="input-box" placeholder="姓名/称呼 (如: 张总/老婆)" required style="flex: 0.8;">
+                <input type="email" id="inputEmail" class="input-box" placeholder="邮箱地址 (如: user@domain.com)" required style="flex: 1.2;">
+                <button type="submit" class="btn-primary"><i class="fa-solid fa-plus"></i> 添加</button>
+            </form>
+
+            <!-- 联系人列表 -->
+            <div class="contact-list" id="contactList">
+                <div style="text-align: center; color: var(--text-muted); padding: 20px;">正在加载通讯录...</div>
+            </div>
+        </div>
+
+        <!-- 历史发送归档 -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title"><i class="fa-solid fa-paper-plane" style="color: #10b981;"></i> 最近已发送邮件</div>
+                <button class="nav-btn" onclick="loadHistory()" style="padding: 4px 10px; font-size: 11px;"><i class="fa-solid fa-rotate-right"></i> 刷新</button>
+            </div>
+
+            <div class="history-list" id="historyList">
+                <div style="text-align: center; color: var(--text-muted); padding: 20px;">正在加载发送记录...</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function loadContacts() {
+            try {
+                const res = await fetch('/api/email/contacts');
+                const data = await res.json();
+                if (data.success) {
+                    const list = document.getElementById('contactList');
+                    document.getElementById('contactCount').innerText = `${data.data.length} 个联系人`;
+                    if (data.data.length === 0) {
+                        list.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">暂无联系人</div>';
+                        return;
+                    }
+                    list.innerHTML = data.data.map(c => `
+                        <div class="contact-item">
+                            <div class="contact-info">
+                                <h4>${c.name}</h4>
+                                <p>${c.email}</p>
+                            </div>
+                            <button class="btn-delete" onclick="deleteContact('${c.name}')" title="删除联系人">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function saveContact(e) {
+            e.preventDefault();
+            const name = document.getElementById('inputName').value.trim();
+            const email = document.getElementById('inputEmail').value.trim();
+            if (!name || !email) return;
+
+            try {
+                const res = await fetch('/api/email/contacts/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, email})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('inputName').value = '';
+                    document.getElementById('inputEmail').value = '';
+                    loadContacts();
+                } else {
+                    alert(data.msg);
+                }
+            } catch (err) {
+                alert('保存失败: ' + err);
+            }
+        }
+
+        async function deleteContact(name) {
+            if (!confirm(`确定要删除联系人【${name}】吗？`)) return;
+            try {
+                const res = await fetch('/api/email/contacts/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadContacts();
+                } else {
+                    alert(data.msg);
+                }
+            } catch (err) {
+                alert('删除失败: ' + err);
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const res = await fetch('/api/email/history');
+                const data = await res.json();
+                if (data.success) {
+                    const list = document.getElementById('historyList');
+                    if (data.data.length === 0) {
+                        list.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">暂无发信记录</div>';
+                        return;
+                    }
+                    list.innerHTML = data.data.map(h => `
+                        <div class="history-item">
+                            <div class="history-top">
+                                <span class="history-to">To: ${h.recipient}</span>
+                                <span class="history-time">${h.time}</span>
+                            </div>
+                            <div class="history-subject">${h.subject}</div>
+                            <div class="history-snippet">${h.snippet || ''}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        loadContacts();
+        loadHistory();
+    </script>
+</body>
+</html>

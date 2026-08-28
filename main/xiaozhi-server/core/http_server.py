@@ -5,6 +5,7 @@ from core.api.ota_handler import OTAHandler
 from core.api.vision_handler import VisionHandler
 from core.api.face_handler import FaceWebHandler
 from core.api.music_handler import MusicWebHandler
+from core.api.email_handler import EmailWebHandler
 from core.services.face_sentinel import FaceSentinel
 
 TAG = __name__
@@ -18,6 +19,7 @@ class SimpleHttpServer:
         self.vision_handler = VisionHandler(config)
         self.face_handler = FaceWebHandler(config)
         self.music_handler = MusicWebHandler(config)
+        self.email_handler = EmailWebHandler(config)
         self.sentinel = FaceSentinel()
 
     def _get_websocket_url(self, local_ip: str, port: int) -> str:

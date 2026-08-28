@@ -21,8 +21,6 @@ CONFIG_FILE = os.path.join(EMAIL_DATA_DIR, "smtp_config.json")
 CONTACTS_FILE = os.path.join(EMAIL_DATA_DIR, "contacts.json")
 SENT_HISTORY_FILE = os.path.join(EMAIL_DATA_DIR, "sent_history.json")
 
-S20_CAMERA_URL = "http://100.122.149.94:8080/shot.jpg"
-
 DEFAULT_CONFIG = {
     "smtp_server": "smtp.office365.com",
     "smtp_port": 587,
@@ -71,6 +69,11 @@ def load_contacts():
             return json.load(f)
     except Exception:
         return DEFAULT_CONTACTS
+
+def save_contacts(contacts):
+    ensure_dirs()
+    with open(CONTACTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(contacts, f, ensure_ascii=False, indent=2)
 
 def save_sent_history(record):
     ensure_dirs()
@@ -145,7 +148,7 @@ def generate_html_email(subject: str, content: str, sender_name: str, has_photo:
 <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
     <div style="max-width: 600px; margin: 30px auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06);">
         <div style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 30px 24px; text-align: center;">
-            <div style="font-size: 32px; margin-bottom: 6px;">🤖 📸 ✉️</div>
+            <div style="font-size: 32px; margin-bottom: 6px;">🤖 ✉️</div>
             <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.5px;">{subject}</h1>
             <p style="color: #c7d2fe; margin: 6px 0 0 0; font-size: 12px;">由 {sender_name} 自动生成并派发 · {now_str}</p>
         </div>
@@ -215,6 +218,52 @@ capture_email_photo_desc = {
                 "note": {
                     "type": "string",
                     "description": "对照片或邮件的补充说明（如'当前客厅画面抓拍'、'书桌近景'），可选。"
+                }
+            },
+            "required": []
+        }
+    }
+}
+
+save_contact_desc = {
+    "type": "function",
+    "function": {
+        "name": "save_email_contact",
+        "description": (
+            "当用户要求记录、保存、添加某个联系人的邮箱地址到通讯录时调用此工具。"
+            "例如用户说：'记住张总的邮箱是 zhang@company.com'、'存一下李老师的邮箱 li@163.com'、'添加联系人王五，邮箱是 wangwu@qq.com'。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "联系人姓名、称呼或别名（如'张总'、'李老师'、'老婆'）"
+                },
+                "email": {
+                    "type": "string",
+                    "description": "联系人的电子邮箱地址（如 zhang@example.com）"
+                }
+            },
+            "required": ["name", "email"]
+        }
+    }
+}
+
+list_contacts_desc = {
+    "type": "function",
+    "function": {
+        "name": "list_email_contacts",
+        "description": (
+            "当用户询问或查看邮箱通讯录中有哪些联系人、某人的邮箱是多少时调用此工具。"
+            "例如用户说：'我的通讯录里都有谁？'、'查一下通讯录'、'张总的邮箱是多少？'。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "可选的搜索人名或称呼（如'张总'），若不传则列出所有联系人"
                 }
             },
             "required": []
@@ -325,19 +374,16 @@ def capture_and_email_photo(recipient: str = "self", note: str = "实时摄像�
         msg["To"] = to_email
         msg["Subject"] = Header(subject, "utf-8")
         
-        # HTML Part
         html_body = generate_html_email(subject, content, sender_name, has_photo=True)
         msg_alternative = MIMEMultipart("alternative")
         msg.attach(msg_alternative)
         msg_alternative.attach(MIMEText(html_body, "html", "utf-8"))
         
-        # Inline Image Part
         img_part = MIMEImage(img_bytes)
         img_part.add_header("Content-ID", "<camera_photo>")
         img_part.add_header("Content-Disposition", "inline", filename=photo_filename)
         msg.attach(img_part)
         
-        # SMTP Send
         context = ssl.create_default_context()
         server = smtplib.SMTP(smtp_host, smtp_port, timeout=20)
         server.ehlo()
@@ -357,7 +403,6 @@ def capture_and_email_photo(recipient: str = "self", note: str = "实时摄像�
         })
         
         logger.bind(tag=TAG).info(f"抓拍照片邮件成功送达 {to_email}!")
-        
         reply_prompt = (
             f"已成功通过摄像头拍摄了一张高清照片并发送到了您的邮箱！\n"
             f"- 目标邮箱：{to_email}\n"
@@ -373,3 +418,38 @@ def capture_and_email_photo(recipient: str = "self", note: str = "实时摄像�
             f"拍照发信失败：{str(e)}。请友好地向主人说明情况。",
             None
         )
+
+@register_function("save_email_contact", save_contact_desc, ToolType.WAIT)
+def save_email_contact(name: str, email: str):
+    """保存或更新联系人邮箱"""
+    try:
+        contacts = load_contacts()
+        contacts[name.strip()] = email.strip()
+        save_contacts(contacts)
+        logger.bind(tag=TAG).info(f"通过语音保存联系人: {name} -> {email}")
+        return ActionResponse(
+            Action.REQLLM,
+            f"已成功将联系人【{name}】（邮箱：{email}）保存到通讯录中！请语音向用户确认已记住该联系人。",
+            None
+        )
+    except Exception as e:
+        return ActionResponse(Action.REQLLM, f"保存联系人失败：{str(e)}", None)
+
+@register_function("list_email_contacts", list_contacts_desc, ToolType.WAIT)
+def list_email_contacts(query: str = None):
+    """查询联系人列表"""
+    contacts = load_contacts()
+    if not contacts:
+        return ActionResponse(Action.REQLLM, "目前通讯录是空的，尚未添加任何联系人。", None)
+    
+    if query:
+        q = query.strip().lower()
+        matched = {k: v for k, v in contacts.items() if q in k.lower() or q in v.lower()}
+        if matched:
+            res_str = f"找到与'{query}'相关的联系人：\n" + "\n".join([f"- {k}: {v}" for k, v in matched.items()])
+            return ActionResponse(Action.REQLLM, res_str + "\n请语音向用户汇报查询结果。", None)
+        else:
+            return ActionResponse(Action.REQLLM, f"通讯录中未找到与'{query}'相关的联系人。", None)
+    else:
+        res_str = "通讯录现有以下联系人：\n" + "\n".join([f"- {k}: {v}" for k, v in contacts.items()])
+        return ActionResponse(Action.REQLLM, res_str + "\n请自然地为用户朗读通讯录名单。", None)
