@@ -57,6 +57,13 @@ class SimpleHttpServer:
                         web.post("/mcp/vision/explain", self.vision_handler.handle_post),
                         web.options("/mcp/vision/explain", self.vision_handler.handle_options),
                         # 人脸记忆与视觉中枢管理后台
+                                                # 邮件与通讯录中枢管理后台
+                        web.get("/email", self.email_handler.handle_page),
+                        web.get("/email/", self.email_handler.handle_page),
+                        web.get("/api/email/contacts", self.email_handler.handle_get_contacts),
+                        web.post("/api/email/contacts/save", self.email_handler.handle_save_contact),
+                        web.post("/api/email/contacts/delete", self.email_handler.handle_delete_contact),
+                        web.get("/api/email/history", self.email_handler.handle_get_history),
                         web.get("/faces", self.face_handler.handle_page),
                         web.get("/faces/", self.face_handler.handle_page),
                         web.get("/faces/index.html", self.face_handler.handle_page),
