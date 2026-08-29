@@ -201,7 +201,7 @@ class FaceSentinel:
             if ref_b64:
                 prompt = f"""请对比图 1（家庭主人【{primary_owner}】标准档案照片）与图 2（摄像头抓拍画面）：
 1. 观察图 2 中人物的动作、姿态、衣着/神态细节，用简短一句话描述（如'在桌前自拍'、'戴着眼镜神态放松'、'正在忙碌'等）；
-2. 比对两张图片中人物的五官面容。只要特征基本吻合，请在最后一行输出：【认定结果：{primary_owner}】；如果完全是无关的陌生外人，输出：【认定结果：访客朋友】。
+2. 比对两张图片中人物的五官面容。若画面中根本没有人脸或只是家具/静物/被褥，请在最后一行输出：【认定结果：无人】；若特征与图1基本吻合，输出：【认定结果：{primary_owner}】；若明确是陌生真人面孔，输出：【认定结果：访客朋友】。
 """
                 content_payload = [
                     {"type": "text", "text": prompt},
@@ -236,7 +236,9 @@ class FaceSentinel:
                 if not visual_desc:
                     visual_desc = "在书桌前停步"
 
-                if f"【认定结果：{primary_owner}】" in content or primary_owner in content:
+                if "【认定结果：无人】" in content or "无人" in content and primary_owner not in content:
+                    return "无人", False, "静物/无人"
+                elif f"【认定结果：{primary_owner}】" in content or primary_owner in content:
                     return primary_owner, True, visual_desc
                 else:
                     return "访客朋友", False, visual_desc
@@ -451,6 +453,8 @@ class FaceSentinel:
             if best_score >= 45.0 and best_bytes:
                 person_name, is_family, visual_desc = self._recognize_person_vlm(best_bytes)
                 print(f"{TAG} VLM Result: name='{person_name}', is_family={is_family}, visual_desc='{visual_desc}'")
+                if person_name == "无人":
+                    continue
 
             if is_family:
                 quality_status = "clear_family"
