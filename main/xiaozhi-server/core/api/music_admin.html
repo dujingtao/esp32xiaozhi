@@ -76,16 +76,25 @@
         </div>
 
         <!-- Center Tabs -->
-        <nav class="hidden md:flex items-center gap-1.5 bg-slate-900/60 p-1 rounded-xl border border-slate-800">
-            <a href="/music" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow flex items-center gap-1.5">
-                <i data-lucide="disc-3" class="w-3.5 h-3.5"></i>
-                本地音乐库
-            </a>
-            <a href="/faces" class="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5">
-                <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
-                人脸视觉记忆
-            </a>
-        </nav>
+                    <!-- Navigation Links -->
+            <nav class="hidden md:flex items-center gap-1 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
+                <a href="/console" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-indigo-600 hover:bg-white transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-microchip"></i>
+                    全能智控台
+                </a>
+                <a href="/faces" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-white transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-id-card-clip"></i>
+                    人脸记忆库
+                </a>
+                <a href="/music" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-white transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-music"></i>
+                    本地音乐库
+                </a>
+                <a href="/email" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-white transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-envelope-open-text"></i>
+                    邮件与通讯录
+                </a>
+            </nav>
 
         <!-- Right Device Status -->
         <div class="flex items-center gap-3">

@@ -1,3 +1,4 @@
+import os
 import asyncio
 from aiohttp import web
 from config.logger import setup_logging
@@ -21,6 +22,13 @@ class SimpleHttpServer:
         self.music_handler = MusicWebHandler(config)
         self.email_handler = EmailWebHandler(config)
         self.sentinel = FaceSentinel()
+
+    async def handle_console_page(self, request):
+        html_path = os.path.join(os.path.dirname(__file__), "api", "console_admin.html")
+        if os.path.exists(html_path):
+            with open(html_path, "r", encoding="utf-8") as f:
+                return web.Response(text=f.read(), content_type="text/html")
+        return web.Response(text="<h1>Console Admin Page Not Found</h1>", content_type="text/html", status=404)
 
     def _get_websocket_url(self, local_ip: str, port: int) -> str:
         server_config = self.config["server"]
@@ -56,14 +64,18 @@ class SimpleHttpServer:
                         web.get("/mcp/vision/explain", self.vision_handler.handle_get),
                         web.post("/mcp/vision/explain", self.vision_handler.handle_post),
                         web.options("/mcp/vision/explain", self.vision_handler.handle_options),
-                        # 人脸记忆与视觉中枢管理后台
-                                                # 邮件与通讯录中枢管理后台
+                        # 🎛️ 小智全能一体化智控中枢 (Unified Console)
+                        web.get("/console", self.handle_console_page),
+                        web.get("/console/", self.handle_console_page),
+                        # 邮件与通讯录中枢管理后台
                         web.get("/email", self.email_handler.handle_page),
                         web.get("/email/", self.email_handler.handle_page),
                         web.get("/api/email/contacts", self.email_handler.handle_get_contacts),
                         web.post("/api/email/contacts/save", self.email_handler.handle_save_contact),
                         web.post("/api/email/contacts/delete", self.email_handler.handle_delete_contact),
                         web.get("/api/email/history", self.email_handler.handle_get_history),
+                        web.post("/api/email/send", self.email_handler.handle_send_email),
+                        # 人脸记忆与视觉中枢管理后台
                         web.get("/faces", self.face_handler.handle_page),
                         web.get("/faces/", self.face_handler.handle_page),
                         web.get("/faces/index.html", self.face_handler.handle_page),

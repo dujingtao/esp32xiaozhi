@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小智 AI · 全能智能中枢智控台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); }
+        .tab-btn.active {
+            background-color: #ffffff;
+            color: #4f46e5;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+        .tab-btn.active svg, .tab-btn.active i { color: #4f46e5; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; animation: fadeIn 0.25s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased">
+    <!-- 顶部统一导航栏 -->
+    <header class="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+            <!-- Brand Logo -->
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-md shadow-indigo-100">
+                    <i class="fa-solid fa-microchip text-lg"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg font-extrabold text-slate-900 leading-tight tracking-tight">小智 AI 全能智控中枢</h1>
+                        <span class="px-2 py-0.5 text-[10px] font-bold tracking-wide rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200">v2.6.0</span>
+                    </div>
+                    <p class="text-xs text-slate-500">视觉哨兵 · 音乐曲库 · 邮件通讯录 · 多模态管理</p>
+                </div>
+            </div>
+
+            <!-- Central Nav Tabs -->
+            <nav class="hidden md:flex items-center gap-1 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
+                <button onclick="switchTab('faces')" id="tab-btn-faces" class="tab-btn active px-4 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2">
+                    <i class="fa-solid fa-id-card-clip text-sm"></i>
+                    视觉人脸记忆
+                </button>
+                <button onclick="switchTab('music')" id="tab-btn-music" class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2">
+                    <i class="fa-solid fa-music text-sm"></i>
+                    本地音乐曲库
+                    <span id="badge-music-count" class="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-200 text-slate-700">0</span>
+                </button>
+                <button onclick="switchTab('email')" id="tab-btn-email" class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2">
+                    <i class="fa-solid fa-envelope-open-text text-sm"></i>
+                    邮件与通讯录
+                    <span id="badge-email-count" class="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-200 text-slate-700">0</span>
+                </button>
+                <button onclick="switchTab('device')" id="tab-btn-device" class="tab-btn px-4 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-sm"></i>
+                    设备与社交规则
+                </button>
+            </nav>
+
+            <!-- Right Status & Global Actions -->
+            <div class="flex items-center space-x-3">
+                <div id="device-status-badge" class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                    <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                    <span id="device-status-text">检测音箱中...</span>
+                </div>
+                <button onclick="stopSpeakerDevice()" title="一键打断音箱当前所有发声与音乐" class="px-3.5 py-1.5 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 border border-rose-200 text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-stop"></i>
+                    <span class="hidden sm:inline">打断播放</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Mobile Nav Selector -->
+    <div class="md:hidden bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-around">
+        <button onclick="switchTab('faces')" class="tab-mob-btn text-xs font-medium py-1 px-2 text-indigo-600 border-b-2 border-indigo-600 flex flex-col items-center gap-1">
+            <i class="fa-solid fa-id-card-clip"></i><span>视觉人脸</span>
+        </button>
+        <button onclick="switchTab('music')" class="tab-mob-btn text-xs font-medium py-1 px-2 text-slate-500 flex flex-col items-center gap-1">
+            <i class="fa-solid fa-music"></i><span>音乐库</span>
+        </button>
+        <button onclick="switchTab('email')" class="tab-mob-btn text-xs font-medium py-1 px-2 text-slate-500 flex flex-col items-center gap-1">
+            <i class="fa-solid fa-envelope"></i><span>邮件通讯录</span>
+        </button>
+        <button onclick="switchTab('device')" class="tab-mob-btn text-xs font-medium py-1 px-2 text-slate-500 flex flex-col items-center gap-1">
+            <i class="fa-solid fa-sliders"></i><span>设备控制</span>
+        </button>
+    </div>
+
+    <!-- 主体容器 -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+
+        <!-- ======================================================== -->
+        <!-- TAB 1: 视觉与人脸档案中枢                               -->
+        <!-- ======================================================== -->
+        <section id="pane-faces" class="tab-pane active space-y-6">
+            <!-- 视觉概览卡片 -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- S20 实时取景窗口 -->
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-video text-indigo-600"></i>
+                                三星 S20 实时取景窗口
+                            </h2>
+                            <span id="s20-status-pill" class="px-2.5 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
+                                正在连接
+                            </span>
+                        </div>
+                        <div class="relative bg-slate-900 rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-slate-800 shadow-inner group">
+                            <img id="camera-live-feed" src="http://100.122.149.94:8080/shot.jpg" alt="Live Camera" class="w-full h-full object-cover">
+                            <div class="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] text-white flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                1080P IP Camera
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <button onclick="refreshCameraPreview()" class="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-arrows-rotate"></i> 刷新取景
+                        </button>
+                        <button onclick="testCameraVLM()" class="flex-1 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold transition flex items-center justify-center gap-1.5 border border-indigo-200">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> 拍摄分析
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 视觉哨兵智能配置卡片 -->
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-shield-halved text-indigo-600"></i>
+                                智能视觉哨兵 (FaceSentinel)
+                            </h2>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="sentinel-switch" class="sr-only peer" onchange="toggleSentinel()">
+                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+                        <p class="text-xs text-slate-500 leading-relaxed">
+                            当摄像头捕捉到家庭成员时，自动触发礼貌问候；无人在场时自动过滤静物与被褥褶皱。
+                        </p>
+
+                        <div class="mt-4 space-y-3.5">
+                            <div>
+                                <div class="flex justify-between text-xs font-medium text-slate-700 mb-1">
+                                    <span>防打扰冷却周期</span>
+                                    <span id="label-cooldown" class="font-bold text-indigo-600">20 分钟</span>
+                                </div>
+                                <input type="range" id="input-cooldown" min="5" max="60" step="5" value="20" oninput="document.getElementById('label-cooldown').innerText = this.value + ' 分钟'" onchange="saveSentinelConfig()" class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                            </div>
+
+                            <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+                                <span class="text-xs text-slate-600">微信 PushPlus 主动通知</span>
+                                <input type="checkbox" id="check-wechat" onchange="saveSentinelConfig()" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
+                            </div>
+
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-600">空房间/静物自动过滤</span>
+                                <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-50 text-emerald-600 border border-emerald-200">已启用 (v2.6)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="triggerSentinelTest()" class="mt-4 w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-play"></i> 模拟触发一次问候
+                    </button>
+                </div>
+
+                <!-- 快速添加人脸档案卡片 -->
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2 mb-3">
+                            <i class="fa-solid fa-user-plus text-indigo-600"></i>
+                            快速录入新人脸档案
+                        </h2>
+                        <form id="form-register-face" onsubmit="handleRegisterFace(event)" class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">姓名 / 称呼</label>
+                                <input type="text" id="reg-face-name" required placeholder="如：布布爸爸 / 老婆 / 儿子" class="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">家庭关系属性</label>
+                                <select id="reg-face-relation" class="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50">
+                                    <option value="owner">家庭主人 (最高优先级)</option>
+                                    <option value="family">家庭成员</option>
+                                    <option value="friend">常客朋友</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">人脸照片 (正脸清晰照)</label>
+                                <input type="file" id="reg-face-file" accept="image/*" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
+                            </div>
+                            <button type="submit" class="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition shadow-md shadow-indigo-100 flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-cloud-arrow-up"></i> 确认录入档案
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 已登记家庭成员档案列表 -->
+            <div class="glass-card rounded-2xl p-6 border border-slate-200/80 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-users text-indigo-600"></i>
+                        已登记家庭成员档案库
+                    </h2>
+                    <span id="badge-faces-count" class="text-xs text-slate-500">共 0 位成员</span>
+                </div>
+                <div id="faces-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <!-- Dynamic Faces Cards -->
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ======================================================== -->
+        <!-- TAB 2: 本地音乐曲库与播控台                           -->
+        <!-- ======================================================== -->
+        <section id="pane-music" class="tab-pane space-y-6">
+            <!-- 统计与上传总览卡片 -->
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-500">曲库歌曲总数</p>
+                        <h3 id="stat-music-count" class="text-2xl font-black text-slate-900 mt-1">0</h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-compact-disc"></i>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-500">占用存储容量</p>
+                        <h3 id="stat-music-size" class="text-2xl font-black text-slate-900 mt-1">0 MB</h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-hard-drive"></i>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-500">音箱在线状态</p>
+                        <h3 id="stat-music-device" class="text-sm font-bold text-slate-900 mt-1 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> 在线就绪
+                        </h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-volume-high"></i>
+                    </div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-500">支持音频格式</p>
+                        <h3 class="text-xs font-bold text-slate-700 mt-1">MP3, FLAC, WAV, M4A</h3>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-file-audio"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 拖拽上传音乐区域 -->
+            <div id="dropzone" onclick="document.getElementById('music-file-input').click()" class="border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl p-6 text-center cursor-pointer transition bg-white/70 hover:bg-indigo-50/40 flex flex-col items-center justify-center">
+                <input type="file" id="music-file-input" multiple accept=".mp3,.flac,.wav,.m4a,.aac,.ogg" class="hidden" onchange="handleMusicUpload(event)">
+                <div class="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl mb-2">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                </div>
+                <h3 class="text-sm font-bold text-slate-800">点击或拖拽音频文件到此处上传</h3>
+                <p class="text-xs text-slate-500 mt-1">支持 MP3, 无损 FLAC, WAV, M4A 格式，自动智能解析歌手与歌名</p>
+            </div>
+
+            <!-- 歌曲曲目列表卡片 -->
+            <div class="glass-card rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-list-ul text-indigo-600"></i>
+                        曲目列表
+                    </h2>
+                    <input type="text" id="music-search" placeholder="搜索歌名、歌手..." oninput="filterMusicList()" class="px-3 py-1 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 w-48 sm:w-64">
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50/80 text-slate-500 text-[11px] font-semibold border-b border-slate-200 uppercase tracking-wider">
+                                <th class="py-3 px-4">歌曲名称</th>
+                                <th class="py-3 px-4">格式/大小</th>
+                                <th class="py-3 px-4">更新时间</th>
+                                <th class="py-3 px-4 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="music-table-body" class="text-xs divide-y divide-slate-100">
+                            <!-- Dynamic Music Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 页面底部全局试听播放条 -->
+            <div id="audio-preview-bar" class="hidden sticky bottom-4 glass-card border border-indigo-200 rounded-2xl p-4 shadow-xl z-30 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-base shadow-md shadow-indigo-200">
+                        <i class="fa-solid fa-play"></i>
+                    </div>
+                    <div>
+                        <h4 id="now-playing-title" class="text-xs font-bold text-slate-900">周杰伦 - 晴天</h4>
+                        <p id="now-playing-info" class="text-[10px] text-slate-500">正在网页端试听</p>
+                    </div>
+                </div>
+                <audio id="global-audio-player" controls class="h-8 max-w-xs sm:max-w-md w-full"></audio>
+                <div class="flex items-center gap-2">
+                    <button id="btn-push-current" onclick="playCurrentOnDevice()" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-md shadow-indigo-100">
+                        <i class="fa-solid fa-tower-broadcast"></i> 在音箱播放
+                    </button>
+                    <button onclick="closeAudioPreview()" class="p-1.5 text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ======================================================== -->
+        <!-- TAB 3: 邮件与通讯录中枢                               -->
+        <!-- ======================================================== -->
+        <section id="pane-email" class="tab-pane space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- 通讯录管理卡片 -->
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-address-book text-indigo-600"></i>
+                                语音通讯录 (别名库)
+                            </h2>
+                            <span id="badge-contacts-count" class="text-xs text-slate-500">7 个联系人</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-3">对小智说“发邮件给张总”时，自动匹配对应邮箱地址。</p>
+
+                        <!-- 添加联系人表单 -->
+                        <form onsubmit="handleSaveContact(event)" class="flex gap-2 mb-4">
+                            <input type="text" id="contact-name" required placeholder="别名(如: 张总)" class="w-1/3 px-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50">
+                            <input type="email" id="contact-email" required placeholder="邮箱(如: zhang@xxx.com)" class="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50">
+                            <button type="submit" class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition">
+                                保存
+                            </button>
+                        </form>
+
+                        <!-- 联系人列表 -->
+                        <div id="contacts-list" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                            <!-- Dynamic Contacts Items -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 快速起草发信卡片 (支持附带摄像头实景) -->
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm lg:col-span-2 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-paper-plane text-indigo-600"></i>
+                                在线起草发信 & 拍照协同
+                            </h2>
+                            <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200 font-semibold">
+                                Microsoft 365 SMTP
+                            </span>
+                        </div>
+
+                        <form id="form-send-email" onsubmit="handleSendEmail(event)" class="space-y-3">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">收件人 (支持通讯录别名或直接邮箱)</label>
+                                    <input type="text" id="email-to" required placeholder="如：dujingt@gmail.com 或 我 / 布布爸爸" class="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">邮件主题</label>
+                                    <input type="text" id="email-subject" required placeholder="如：小智定时提醒 / 现场快照汇报" class="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">正文内容 (支持 Markdown)</label>
+                                <textarea id="email-content" rows="4" required placeholder="请输入邮件正文内容..." class="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 custom-scrollbar"></textarea>
+                            </div>
+
+                            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-camera text-indigo-600 text-sm"></i>
+                                    <div>
+                                        <p class="text-xs font-semibold text-slate-800">附带 S20 现场实时快照</p>
+                                        <p class="text-[10px] text-slate-500">自动抓拍一张 1080P 照片并作为附件与正文插图发送</p>
+                                    </div>
+                                </div>
+                                <input type="checkbox" id="email-attach-camera" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
+                            </div>
+
+                            <button type="submit" id="btn-submit-email" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-md shadow-indigo-100 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-paper-plane"></i> 立即投递邮件
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 历史发信记录卡片 -->
+            <div class="glass-card rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-indigo-600"></i>
+                        历史发信记录流水
+                    </h2>
+                    <button onclick="loadEmailHistory()" class="text-xs text-indigo-600 hover:underline flex items-center gap-1">
+                        <i class="fa-solid fa-arrows-rotate"></i> 刷新流水
+                    </button>
+                </div>
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50/80 text-slate-500 text-[11px] font-semibold border-b border-slate-200 uppercase tracking-wider">
+                                <th class="py-3 px-4">发送时间</th>
+                                <th class="py-3 px-4">收件人</th>
+                                <th class="py-3 px-4">主题</th>
+                                <th class="py-3 px-4">附件类型</th>
+                                <th class="py-3 px-4">正文摘要</th>
+                            </tr>
+                        </thead>
+                        <tbody id="email-history-body" class="text-xs divide-y divide-slate-100">
+                            <!-- Dynamic Email History Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ======================================================== -->
+        <!-- TAB 4: 设备状态与社交规则                             -->
+        <!-- ======================================================== -->
+        <section id="pane-device" class="tab-pane space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 硬件连接卡片 -->
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2 mb-4">
+                        <i class="fa-solid fa-server text-indigo-600"></i>
+                        ESP32 设备与 WebSocket 链路
+                    </h2>
+                    <div class="space-y-3 text-xs">
+                        <div class="flex justify-between py-2 border-b border-slate-100">
+                            <span class="text-slate-500">设备型号</span>
+                            <span class="font-bold text-slate-800">bread-compact-wifi (ESP32-S3)</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-slate-100">
+                            <span class="text-slate-500">物理 MAC 地址</span>
+                            <span class="font-mono text-slate-800">28:84:85:47:89:58</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-slate-100">
+                            <span class="text-slate-500">固件版本</span>
+                            <span class="font-bold text-indigo-600">v2.5.0 (ESP-IDF v6.0.2)</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-slate-100">
+                            <span class="text-slate-500">音频传输参数</span>
+                            <span class="text-slate-800">Opus 16kHz Mono (60ms Frame)</span>
+                        </div>
+                        <div class="flex justify-between py-2 border-b border-slate-100">
+                            <span class="text-slate-500">已加载工具数量</span>
+                            <span class="font-bold text-emerald-600">31 服务插件 + 10 硬件MCP工具</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 社交规则与状态机卡片 -->
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2 mb-4">
+                        <i class="fa-solid fa-masks-theater text-indigo-600"></i>
+                        智能社交规则状态机 (Social Etiquette Engine)
+                    </h2>
+                    <div class="space-y-4">
+                        <div class="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100 text-xs">
+                            <div class="flex items-center gap-2 font-bold text-indigo-900 mb-1">
+                                <i class="fa-solid fa-circle-check text-indigo-600"></i>
+                                <span>当前社交状态：热情就绪 / 静默待命中</span>
+                            </div>
+                            <p class="text-indigo-700 text-[11px] leading-relaxed">
+                                视觉初见仅 1 句轻量问候；未回应即刻闭嘴退场；静默监听中不主动插话，喊“小智”瞬间唤醒。
+                            </p>
+                        </div>
+
+                        <!-- 快速播报测试 -->
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">快速向音箱推送语音播报 (TTS)</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="tts-quick-text" placeholder="输入一句话测试音箱发声..." class="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50">
+                                <button onclick="sendQuickTTS()" class="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition">
+                                    推送播报
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 底部版权栏 -->
+    <footer class="bg-white border-t border-slate-200 py-4 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
+            小智 AI 全能智控台 · Multi-Modal Intelligence Console &copy; 2026
+        </div>
+    </footer>
+
+    <!-- JavaScript 逻辑驱动 -->
+    <script>
+        let currentPlayingFilename = '';
+        let allSongs = [];
+
+        // ── Tab 切换逻辑 ──
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+
+            const targetBtn = document.getElementById(`tab-btn-${tabId}`);
+            const targetPane = document.getElementById(`pane-faces`); // default fallback
+
+            if (targetBtn) targetBtn.classList.add('active');
+            const p = document.getElementById(`pane-${tabId}`);
+            if (p) p.classList.add('active');
+
+            // 联动更新移动端
+            document.querySelectorAll('.tab-mob-btn').forEach(b => {
+                b.classList.remove('text-indigo-600', 'border-b-2', 'border-indigo-600');
+                b.classList.add('text-slate-500');
+            });
+
+            // 触发对应数据刷新
+            if (tabId === 'faces') loadFacesData();
+            if (tabId === 'music') loadMusicData();
+            if (tabId === 'email') { loadContacts(); loadEmailHistory(); }
+        }
+
+        // ── 页面加载与轮询 ──
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFacesData();
+            loadMusicData();
+            loadContacts();
+            loadEmailHistory();
+            checkDeviceHeartbeat();
+            setInterval(checkDeviceHeartbeat, 5000);
+        });
+
+        // ── 1. 视觉人脸逻辑 ──
+        async function loadFacesData() {
+            try {
+                const res = await fetch('/api/faces');
+                const data = await res.json();
+                if (data.code === 0 && data.data) {
+                    renderFacesGrid(data.data);
+                }
+            } catch (e) {
+                console.error('加载人脸数据失败:', e);
+            }
+
+            try {
+                const res = await fetch('/api/faces/sentinel');
+                const data = await res.json();
+                if (data.code === 0 && data.data) {
+                    const cfg = data.data.config || {};
+                    document.getElementById('sentinel-switch').checked = cfg.enabled !== false;
+                    document.getElementById('input-cooldown').value = cfg.cooldown_minutes || 20;
+                    document.getElementById('label-cooldown').innerText = (cfg.cooldown_minutes || 20) + ' 分钟';
+                    document.getElementById('check-wechat').checked = cfg.wechat_notify !== false;
+                }
+            } catch (e) {}
+        }
+
+        function renderFacesGrid(faces) {
+            const grid = document.getElementById('faces-grid');
+            document.getElementById('badge-faces-count').innerText = `共 ${faces.length} 位成员`;
+            if (!faces.length) {
+                grid.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-6">暂无人脸档案，请在上方录入</p>';
+                return;
+            }
+            grid.innerHTML = faces.map(f => `
+                <div class="p-3.5 rounded-xl border border-slate-200/80 bg-white shadow-sm flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <img src="/api/faces/image/${encodeURIComponent(f.image_file || (f.name + '.jpg'))}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(f.name)}&background=6366f1&color=fff'" class="w-12 h-12 rounded-xl object-cover border border-slate-100 shadow-sm">
+                        <div>
+                            <h4 class="text-xs font-bold text-slate-900">${f.name}</h4>
+                            <p class="text-[10px] text-slate-500">${f.relation === 'owner' ? '👑 家庭主人' : '家庭成员'}</p>
+                        </div>
+                    </div>
+                    <button onclick="deleteFace('${f.name}')" class="text-slate-400 hover:text-rose-600 p-1 transition" title="删除档案">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function refreshCameraPreview() {
+            const img = document.getElementById('camera-live-feed');
+            img.src = 'http://100.122.149.94:8080/shot.jpg?t=' + Date.now();
+        }
+
+        async function testCameraVLM() {
+            Swal.fire({ title: '正在调用多模态 VLM 分析...', didOpen: () => Swal.showLoading() });
+            try {
+                const res = await fetch('/api/faces/recognize', { method: 'POST' });
+                const d = await res.json();
+                Swal.fire({
+                    icon: d.code === 0 ? 'success' : 'info',
+                    title: '识别结果',
+                    html: `<p class="text-sm font-semibold">${d.msg || JSON.stringify(d)}</p>`
+                });
+            } catch (e) {
+                Swal.fire('分析异常', e.message, 'error');
+            }
+        }
+
+        async function toggleSentinel() {
+            const enabled = document.getElementById('sentinel-switch').checked;
+            await fetch('/api/faces/sentinel/toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled})
+            });
+        }
+
+        async function saveSentinelConfig() {
+            const cooldown = parseInt(document.getElementById('input-cooldown').value);
+            const wechat = document.getElementById('check-wechat').checked;
+            await fetch('/api/faces/sentinel/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({cooldown_minutes: cooldown, wechat_notify: wechat})
+            });
+        }
+
+        async function triggerSentinelTest() {
+            Swal.fire({ title: '模拟主动问候中...', didOpen: () => Swal.showLoading() });
+            const res = await fetch('/api/faces/sentinel/trigger_test', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: '布布爸爸'})
+            });
+            const d = await res.json();
+            Swal.fire('已触发', d.msg, 'success');
+        }
+
+        async function handleRegisterFace(e) {
+            e.preventDefault();
+            const name = document.getElementById('reg-face-name').value.trim();
+            const relation = document.getElementById('reg-face-relation').value;
+            const fileInput = document.getElementById('reg-face-file');
+            
+            const formData = new FormData();
+            formData.append('name', name);
+            formData.append('relation', relation);
+            if (fileInput.files[0]) {
+                formData.append('file', fileInput.files[0]);
+            }
+            
+            Swal.fire({ title: '正在录入人脸档案...', didOpen: () => Swal.showLoading() });
+            const res = await fetch('/api/faces/register', { method: 'POST', body: formData });
+            const d = await res.json();
+            if (d.code === 0) {
+                Swal.fire('录入成功', d.msg, 'success');
+                document.getElementById('form-register-face').reset();
+                loadFacesData();
+            } else {
+                Swal.fire('录入失败', d.msg, 'error');
+            }
+        }
+
+        async function deleteFace(name) {
+            const confirm = await Swal.fire({
+                title: `确定删除人脸档案【${name}】？`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '删除',
+                cancelButtonText: '取消'
+            });
+            if (confirm.isConfirmed) {
+                await fetch('/api/faces/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name})
+                });
+                loadFacesData();
+            }
+        }
+
+        // ── 2. 音乐曲库逻辑 ──
+        async function loadMusicData() {
+            try {
+                const res = await fetch('/api/music/list');
+                const data = await res.json();
+                if (data.code === 0 && data.data) {
+                    allSongs = data.data.songs || [];
+                    document.getElementById('stat-music-count').innerText = data.data.total_count || 0;
+                    document.getElementById('stat-music-size').innerText = data.data.total_size_formatted || '0 MB';
+                    document.getElementById('badge-music-count').innerText = data.data.total_count || 0;
+                    renderMusicTable(allSongs);
+                }
+            } catch (e) {
+                console.error('加载音乐列表失败:', e);
+            }
+        }
+
+        function renderMusicTable(songs) {
+            const tbody = document.getElementById('music-table-body');
+            if (!songs.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-slate-400">曲库暂无音乐，请点击上方区域上传</td></tr>';
+                return;
+            }
+            tbody.innerHTML = songs.map(s => `
+                <tr class="hover:bg-slate-50/80 transition">
+                    <td class="py-3 px-4">
+                        <div class="font-bold text-slate-900">${s.title}</div>
+                        <div class="text-[10px] text-slate-500">${s.artist}</div>
+                    </td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">${s.ext}</span>
+                        <span class="text-[11px] text-slate-500 ml-1">${s.size_formatted}</span>
+                    </td>
+                    <td class="py-3 px-4 text-slate-500 text-[11px]">${s.modified_at}</td>
+                    <td class="py-3 px-4 text-right space-x-1">
+                        <button onclick="previewAudio('${s.play_url}', '${s.title}', '${s.artist}', '${s.filename}')" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-semibold transition" title="试听">
+                            <i class="fa-solid fa-play"></i> 试听
+                        </button>
+                        <button onclick="playOnDeviceDirect('${s.filename}', '${s.title}')" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 font-semibold transition" title="推送到音箱">
+                            <i class="fa-solid fa-tower-broadcast"></i> 音箱播
+                        </button>
+                        <button onclick="deleteMusic('${s.filename}')" class="p-1 text-slate-400 hover:text-rose-600 transition" title="删除">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterMusicList() {
+            const query = document.getElementById('music-search').value.toLowerCase();
+            const filtered = allSongs.filter(s => s.title.toLowerCase().includes(query) || s.artist.toLowerCase().includes(query));
+            renderMusicTable(filtered);
+        }
+
+        function previewAudio(url, title, artist, filename) {
+            currentPlayingFilename = filename;
+            const bar = document.getElementById('audio-preview-bar');
+            const player = document.getElementById('global-audio-player');
+            document.getElementById('now-playing-title').innerText = `${artist} - ${title}`;
+            bar.classList.remove('hidden');
+            player.src = url;
+            player.play();
+        }
+
+        function closeAudioPreview() {
+            const player = document.getElementById('global-audio-player');
+            player.pause();
+            document.getElementById('audio-preview-bar').classList.add('hidden');
+        }
+
+        async function playCurrentOnDevice() {
+            if (currentPlayingFilename) {
+                await playOnDeviceDirect(currentPlayingFilename, document.getElementById('now-playing-title').innerText);
+            }
+        }
+
+        async function playOnDeviceDirect(filename, title) {
+            Swal.fire({ title: `正在向小智音箱推送《${title}》...`, didOpen: () => Swal.showLoading() });
+            try {
+                const res = await fetch('/api/music/play_on_device', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({filename, title})
+                });
+                const d = await res.json();
+                if (d.code === 0) {
+                    Swal.fire('推送成功', d.msg, 'success');
+                } else {
+                    Swal.fire('推送失败', d.msg, 'warning');
+                }
+            } catch (e) {
+                Swal.fire('推送异常', e.message, 'error');
+            }
+        }
+
+        async function deleteMusic(filename) {
+            const confirm = await Swal.fire({
+                title: `确定删除歌曲【${filename}】？`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '删除',
+                cancelButtonText: '取消'
+            });
+            if (confirm.isConfirmed) {
+                await fetch('/api/music/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({filename})
+                });
+                loadMusicData();
+            }
+        }
+
+        async function handleMusicUpload(e) {
+            const files = e.target.files;
+            if (!files.length) return;
+            const formData = new FormData();
+            for (let f of files) formData.append('file', f);
+
+            Swal.fire({ title: `正在上传 ${files.length} 首音乐...`, didOpen: () => Swal.showLoading() });
+            try {
+                const res = await fetch('/api/music/upload', { method: 'POST', body: formData });
+                const d = await res.json();
+                if (d.code === 0) {
+                    Swal.fire('上传完成', d.msg, 'success');
+                    loadMusicData();
+                } else {
+                    Swal.fire('上传失败', d.msg, 'error');
+                }
+            } catch (e) {
+                Swal.fire('上传异常', e.message, 'error');
+            }
+        }
+
+        // ── 3. 邮件与通讯录逻辑 ──
+        async function loadContacts() {
+            try {
+                const res = await fetch('/api/email/contacts');
+                const data = await res.json();
+                if (data.code === 0 && data.data) {
+                    document.getElementById('badge-contacts-count').innerText = `${data.data.length} 个联系人`;
+                    document.getElementById('badge-email-count').innerText = data.data.length;
+                    const list = document.getElementById('contacts-list');
+                    list.innerHTML = data.data.map(c => `
+                        <div class="p-2.5 rounded-xl border border-slate-100 bg-white flex items-center justify-between hover:border-indigo-200 transition">
+                            <div class="flex items-center gap-2 cursor-pointer" onclick="selectContactForEmail('${c.name}', '${c.email}')">
+                                <span class="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold">${c.name.charAt(0)}</span>
+                                <div>
+                                    <div class="font-bold text-slate-800 text-xs">${c.name}</div>
+                                    <div class="text-[10px] text-slate-500 font-mono">${c.email}</div>
+                                </div>
+                            </div>
+                            <button onclick="deleteContact('${c.name}')" class="text-slate-400 hover:text-rose-600 p-1">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {}
+        }
+
+        function selectContactForEmail(name, email) {
+            document.getElementById('email-to').value = email;
+            document.getElementById('email-subject').focus();
+        }
+
+        async function handleSaveContact(e) {
+            e.preventDefault();
+            const name = document.getElementById('contact-name').value.trim();
+            const email = document.getElementById('contact-email').value.trim();
+            const res = await fetch('/api/email/contacts/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, email})
+            });
+            const d = await res.json();
+            if (d.code === 0) {
+                document.getElementById('contact-name').value = '';
+                document.getElementById('contact-email').value = '';
+                loadContacts();
+            }
+        }
+
+        async function deleteContact(name) {
+            await fetch('/api/email/contacts/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name})
+            });
+            loadContacts();
+        }
+
+        async function loadEmailHistory() {
+            try {
+                const res = await fetch('/api/email/history');
+                const data = await res.json();
+                if (data.code === 0 && data.data) {
+                    const tbody = document.getElementById('email-history-body');
+                    if (!data.data.length) {
+                        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-slate-400">暂无已发邮件记录</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = data.data.map(h => `
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="py-3 px-4 text-slate-500 font-mono text-[11px]">${h.time || h.timestamp}</td>
+                            <td class="py-3 px-4 font-bold text-slate-800">${h.to || h.to_email}</td>
+                            <td class="py-3 px-4">${h.subject}</td>
+                            <td class="py-3 px-4">
+                                ${h.has_photo ? '<span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 text-[10px] font-bold">📷 S20照片</span>' : '<span class="text-slate-400">纯文本</span>'}
+                            </td>
+                            <td class="py-3 px-4 text-slate-500 truncate max-w-xs">${h.content || ''}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {}
+        }
+
+        async function handleSendEmail(e) {
+            e.preventDefault();
+            const to = document.getElementById('email-to').value.trim();
+            const subject = document.getElementById('email-subject').value.trim();
+            const content = document.getElementById('email-content').value.trim();
+            const attachCamera = document.getElementById('email-attach-camera').checked;
+
+            Swal.fire({
+                title: attachCamera ? '正在抓拍 S20 照片并投递邮件...' : '正在投递邮件...',
+                didOpen: () => Swal.showLoading()
+            });
+
+            try {
+                const res = await fetch('/api/email/send', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({to, subject, content, attach_camera: attachCamera})
+                });
+                const d = await res.json();
+                if (d.code === 0) {
+                    Swal.fire('发送成功', d.msg, 'success');
+                    document.getElementById('form-send-email').reset();
+                    loadEmailHistory();
+                } else {
+                    Swal.fire('发送失败', d.msg, 'error');
+                }
+            } catch (e) {
+                Swal.fire('发送异常', e.message, 'error');
+            }
+        }
+
+        // ── 4. 全局设备状态与操作 ──
+        async function checkDeviceHeartbeat() {
+            try {
+                const res = await fetch('/api/music/list');
+                const data = await res.json();
+                const badge = document.getElementById('device-status-badge');
+                const text = document.getElementById('device-status-text');
+                if (data.data && data.data.device_online) {
+                    badge.className = 'hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200';
+                    text.innerText = 'ESP32 音箱在线';
+                } else {
+                    badge.className = 'hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200';
+                    text.innerText = '音箱等待连接';
+                }
+            } catch (e) {}
+        }
+
+        async function stopSpeakerDevice() {
+            try {
+                const res = await fetch('/api/music/stop_device', { method: 'POST' });
+                const d = await res.json();
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'info',
+                    title: d.msg || '已发送即时打断指令',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+            } catch (e) {}
+        }
+
+        async function sendQuickTTS() {
+            const text = document.getElementById('tts-quick-text').value.trim();
+            if (!text) return;
+            Swal.fire({ title: '正在推送播报...', didOpen: () => Swal.showLoading() });
+            // 调用模拟问候或设备播报
+            const res = await fetch('/api/faces/sentinel/trigger_test', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: '布布爸爸', custom_text: text})
+            });
+            Swal.fire('已推送播报', text, 'success');
+            document.getElementById('tts-quick-text').value = '';
+        }
+    </script>
+</body>
+</html>

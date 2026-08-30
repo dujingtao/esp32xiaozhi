@@ -13,7 +13,7 @@
     <script defer="defer" src="/js/app.19fd86ef.js"></script>
     <link href="/css/app.5a7e25c8.css" rel="stylesheet">
     <style>
-        /* 顶部导航栏支持滚轮横向滑动 */
+        /* 顶部导航栏支持滚轮横向滑动与现代流线 */
         .header-container {
             display: flex !important;
             align-items: center !important;
@@ -52,12 +52,13 @@
         .equipment-management {
             flex-shrink: 0 !important;
         }
-        /* 人脸记忆导航项 hover 效果 */
-        #nav-face-custom-tab:hover .nav-text {
-            color: #409eff !important;
+        /* 自定义扩展导航项 hover 效果 */
+        .custom-xz-nav-item:hover .nav-text {
+            color: #4f46e5 !important;
+            font-weight: 600 !important;
         }
-        #nav-face-custom-tab:hover svg {
-            stroke: #409eff !important;
+        .custom-xz-nav-item:hover svg {
+            stroke: #4f46e5 !important;
         }
     </style>
 </head>
@@ -79,57 +80,78 @@
             }
         }
 
-        // 2. 原生低调注入人脸菜单与卡片按钮（保持严格唯一）
-        function syncFaceUI() {
+        // 2. 原生注入全能中枢、人脸、音乐、邮件导航菜单与卡片按钮
+        function syncUnifiedConsoleUI() {
             initNavScroll();
 
-            // A. 顶部导航栏：在【知识库】旁边挂载唯一【人脸记忆】
+            // A. 顶部导航栏：在【知识库】旁边挂载全能智控台、人脸、音乐、邮件
             const headerCenter = document.querySelector('.header-center');
-            if (headerCenter && !document.getElementById('nav-face-custom-tab')) {
+            if (headerCenter && !document.getElementById('nav-unified-console-tab')) {
                 const tabs = headerCenter.querySelectorAll('.equipment-management');
                 for (let tab of tabs) {
                     if (tab.innerText && tab.innerText.includes('知识库')) {
-                        const faceTab = document.createElement('div');
-                        faceTab.id = 'nav-face-custom-tab';
-                        faceTab.className = 'equipment-management';
-                        faceTab.style.cssText = 'cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap;';
-                        faceTab.innerHTML = `
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#606266" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle; transition: stroke 0.2s;">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="12" cy="7" r="4"></circle>
-                            </svg>
-                            <span class="nav-text" style="font-size: 14px; color: #303133; font-weight: normal; line-height: 1; transition: color 0.2s;">人脸记忆</span>
+                        const navContainer = document.createElement('div');
+                        navContainer.id = 'nav-unified-console-tab';
+                        navContainer.style.cssText = 'display: inline-flex; align-items: center; gap: 8px; margin-left: 6px;';
+                        
+                        navContainer.innerHTML = `
+                            <div class="equipment-management custom-xz-nav-item" style="cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap; padding: 4px 8px; border-radius: 8px; background: #eef2ff;" onclick="window.open('/console', '_blank')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;">
+                                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                                </svg>
+                                <span class="nav-text" style="font-size: 13px; color: #4f46e5; font-weight: 600; line-height: 1;">全能智控台</span>
+                            </div>
+                            <div class="equipment-management custom-xz-nav-item" style="cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap;" onclick="window.open('/faces', '_blank')">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#606266" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                                <span class="nav-text" style="font-size: 13px; color: #303133; line-height: 1;">人脸记忆</span>
+                            </div>
+                            <div class="equipment-management custom-xz-nav-item" style="cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap;" onclick="window.open('/music', '_blank')">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#606266" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                                    <path d="M9 18V5l12-2v13"></path>
+                                    <circle cx="6" cy="18" r="3"></circle>
+                                    <circle cx="18" cy="16" r="3"></circle>
+                                </svg>
+                                <span class="nav-text" style="font-size: 13px; color: #303133; line-height: 1;">音乐曲库</span>
+                            </div>
+                            <div class="equipment-management custom-xz-nav-item" style="cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap;" onclick="window.open('/email', '_blank')">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#606266" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                    <polyline points="22,6 12,13 2,6"></polyline>
+                                </svg>
+                                <span class="nav-text" style="font-size: 13px; color: #303133; line-height: 1;">邮件通讯录</span>
+                            </div>
                         `;
-                        faceTab.onclick = function() {
-                            window.open('/faces.html', '_blank');
-                        };
-                        tab.parentNode.insertBefore(faceTab, tab.nextSibling);
+                        tab.parentNode.insertBefore(navContainer, tab.nextSibling);
                         break;
                     }
                 }
             }
 
-            // B. 智能体卡片：在【声纹识别】旁边挂载唯一【人脸识别】
+            // B. 智能体卡片设置区域：注入快捷入口按钮
             const btns = document.querySelectorAll('.settings-btn');
             for (let b of btns) {
                 if (b.innerText && b.innerText.trim() === '声纹识别') {
                     const parent = b.parentNode;
-                    if (parent && !parent.querySelector('.face-card-custom-btn')) {
-                        const faceBtn = document.createElement('div');
-                        faceBtn.className = 'settings-btn face-card-custom-btn';
-                        faceBtn.innerText = '人脸识别';
-                        faceBtn.onclick = function(e) {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            window.open('/faces.html', '_blank');
-                        };
-                        parent.insertBefore(faceBtn, b.nextSibling);
+                    if (parent && !parent.querySelector('.custom-xz-card-btns')) {
+                        const btnContainer = document.createElement('span');
+                        btnContainer.className = 'custom-xz-card-btns';
+                        btnContainer.innerHTML = `
+                            <div class="settings-btn" style="color: #4f46e5; font-weight: bold; margin-left: 6px;" onclick="event.stopPropagation(); event.preventDefault(); window.open('/console', '_blank');">全能控制台</div>
+                            <div class="settings-btn" style="margin-left: 6px;" onclick="event.stopPropagation(); event.preventDefault(); window.open('/music', '_blank');">音乐曲库</div>
+                            <div class="settings-btn" style="margin-left: 6px;" onclick="event.stopPropagation(); event.preventDefault(); window.open('/email', '_blank');">邮件通讯录</div>
+                        `;
+                        parent.insertBefore(btnContainer, b.nextSibling);
                     }
                 }
             }
         }
 
-        setInterval(syncFaceUI, 350);
+        setInterval(syncUnifiedConsoleUI, 350);
     </script>
 </body>
 </html>

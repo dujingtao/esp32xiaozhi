@@ -92,6 +92,28 @@ class EmailWebHandler:
         except Exception as e:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
 
+    async def handle_send_email(self, request):
+        try:
+            data = await request.json()
+            to = data.get("to", "").strip()
+            subject = data.get("subject", "").strip()
+            content = data.get("content", "").strip()
+            attach_camera = data.get("attach_camera", False)
+            
+            if not to:
+                return web.json_response({"code": 400, "success": False, "msg": "收件人不能为空"})
+                
+            if attach_camera:
+                from plugins_func.functions.send_email import capture_and_email_photo
+                res = await capture_and_email_photo(None, to_person=to, extra_message=content)
+                return web.json_response({"code": 0, "success": True, "msg": res.response})
+            else:
+                from plugins_func.functions.send_email import send_email
+                res = await send_email(None, to=to, subject=subject, content=content)
+                return web.json_response({"code": 0, "success": True, "msg": res.response})
+        except Exception as e:
+            return web.json_response({"code": 500, "success": False, "msg": str(e)})
+
     async def handle_get_history(self, request):
         history = self._load_history()
         return web.json_response({"code": 0, "success": True, "data": list(reversed(history[-100:]))})
