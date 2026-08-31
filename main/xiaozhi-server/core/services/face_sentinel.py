@@ -54,8 +54,9 @@ class FaceSentinel:
             "enabled": True,
             "camera_url": "http://100.122.149.94:8080/shot.jpg",
             "check_interval": 0.5,
-            "absence_threshold_sec": 25,      # 连续 25 秒无真人人脸即判定为离席
-            "min_reentry_cooldown_sec": 60,   # 重入问候冷却时间 (1分钟)
+            "absence_threshold_sec": 45,      # 连续 45 秒未检测到正面即进入离席准备
+            "min_reentry_cooldown_sec": 30,   # 触发后 30 秒内静默
+            "reengage_timeout_sec": 7200,     # 同一人 2 小时内重看镜头仅轻咳应答，不长篇大论
             "wechat_notify": True,
             "greet_stranger": True,
             "last_global_greeting_time": 0,
@@ -64,18 +65,32 @@ class FaceSentinel:
         self.load_config()
         self.status = "monitoring"
         
-        # 状态机: "ABSENT" (离席无人/守望中) | "PRESENT" (在场静默伴随) | "LEAVING" (疑似离开过渡中)
+        # 状态机: "ABSENT" (离席无人) | "PRESENT" (在场伴随静默) | "LEAVING" (离开过渡) | "ON_CALL" (通话免打扰)
         self.presence_state = "ABSENT"
         self.last_seen_time = 0
         self.last_unseen_time = time.time()
         self.last_check_time = 0
+        
+        # 告别与通话免打扰保护锁 (时间戳)
+        self.post_exit_mute_until = 0
+        
+        # 身份与同人重入记忆
+        self.last_greeted_person = None
+        self.last_full_greeting_time = 0
         
         self.cascades = []
         self._init_cascades()
         
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.worker_thread.start()
-        print(f"{TAG} v2.1.0 High-Sensitivity Sentinel Started: Presence State Machine Active.")
+        print(f"{TAG} v2.3.0 Sentinel Started: Call Perception & Goodbye DND Protection Active.")
+
+    def set_post_exit_cooldown(self, seconds=300):
+        """用户主动告别/退出/打电话后，进入 5 分钟静默保护期，绝不主动打扰"""
+        self.post_exit_mute_until = time.time() + seconds
+        self.presence_state = "PRESENT"
+        self.status = "post_exit_silent"
+        print(f"{TAG} Post-exit DND activated for {seconds}s (until {datetime.fromtimestamp(self.post_exit_mute_until).strftime('%H:%M:%S')})")
 
     def _init_cascades(self):
         paths = [
@@ -103,10 +118,13 @@ class FaceSentinel:
     def get_status(self):
         now_ts = time.time()
         absence_sec = int(now_ts - self.last_seen_time) if self.last_seen_time > 0 else 9999
+        dnd_remaining = max(0, int(self.post_exit_mute_until - now_ts))
         return {
             "enabled": self.config.get("enabled", True),
             "status": getattr(self, "status", "monitoring"),
             "presence_state": getattr(self, "presence_state", "ABSENT"),
+            "dnd_remaining_seconds": dnd_remaining,
+            "last_greeted_person": getattr(self, "last_greeted_person", None),
             "absence_seconds": absence_sec,
             "last_seen_time": getattr(self, "last_seen_time", 0),
             "last_check_time": getattr(self, "last_check_time", 0),
@@ -149,17 +167,14 @@ class FaceSentinel:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = []
             
-            # 1. 优先使用正面人脸 alt2 分类器 (minNeighbors=3 避免边角假人脸)
             c_front = self.cascades[0]
             dets = c_front.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(60, 60))
             for f in dets:
                 x, y, w, h = int(f[0]), int(f[1]), int(f[2]), int(f[3])
-                # 过滤极其贴近画面边缘极小死角的干扰噪点
                 if y + h >= H - 5 and (x <= 5 or x + w >= W - 5) and w < 80:
                     continue
                 faces.append((x, y, w, h))
 
-            # 2. 如果正面未检出且配置了侧脸分类器，采用严格 minNeighbors=4 侧脸检测
             if not faces and len(self.cascades) > 1:
                 c_prof = self.cascades[1]
                 dets_prof = c_prof.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(60, 60))
@@ -213,7 +228,7 @@ class FaceSentinel:
         return total_score, aspect, face_crop
 
     def _recognize_person_vlm(self, img_bytes):
-        """使用智谱 GLM-4V-Flash 进行双图比对并提取现场视觉情境线索"""
+        """使用智谱 GLM-4V-Flash 进行多模态动作姿态与通话判定"""
         family_members = []
         if os.path.exists(FAMILY_FACES_PATH):
             try:
@@ -243,8 +258,12 @@ class FaceSentinel:
 
             if ref_b64:
                 prompt = f"""请对比图 1（家庭主人【{primary_owner}】标准档案照片）与图 2（摄像头抓拍画面）：
-1. 观察图 2 中人物的动作、姿态、衣着或神态细节，用简短一句话描述（如'在桌前自拍'、'戴着眼镜神态放松'、'正在忙碌'等）；
-2. 比对两张图片中人物的五官面容。若画面中根本没有人脸或只是家具/静物/被褥，请在最后一行输出：【认定结果：无人】；若特征与图1基本吻合，输出：【认定结果：{primary_owner}】；若明确是陌生真人面孔，输出：【认定结果：访客朋友】。
+1. 观察图 2 中人物动作与姿态（特别注意：是否手持手机在耳边接打电话、是否戴着耳机通话中、是否正在看手机），用简短一句话描述；
+2. 判定结果输出规则：
+   - 若画面中人物手持手机在耳边打电话或明显正在语音通话，最后一行必须输出：【认定结果：正在打电话】；
+   - 若根本没有人脸或只是静物被褥，输出：【认定结果：无人】；
+   - 若特征与图1吻合且未在打电话，输出：【认定结果：{primary_owner}】；
+   - 若是陌生面孔且未在打电话，输出：【认定结果：访客朋友】。
 """
                 content_payload = [
                     {"type": "text", "text": prompt},
@@ -252,7 +271,7 @@ class FaceSentinel:
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
                 ]
             else:
-                prompt = f"""你是一个家庭人脸识别助手。观察眼前的人物，用简短一句话描述其动作或神态。只要与家庭主人【{primary_owner}】吻合，最后一行输出：【认定结果：{primary_owner}】，否则输出：【认定结果：访客朋友】。"""
+                prompt = f"""观察眼前的画面：若人物正在手持手机耳边打电话，输出【认定结果：正在打电话】；若为主人【{primary_owner}】，输出【认定结果：{primary_owner}】；否则输出【认定结果：访客朋友】。"""
                 content_payload = [
                     {"type": "text", "text": prompt},
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
@@ -274,14 +293,15 @@ class FaceSentinel:
                 content = result_json["choices"][0]["message"]["content"].strip()
                 print(f"{TAG} VLM Raw Output: {content}")
                 
-                # 提取并清理视觉观察描述 (去掉 1. 2. 等标号残留)
                 raw_desc = content.split("【认定结果")[0].strip() if "【认定结果" in content else "正在摄像头面前"
                 visual_desc = re.sub(r"^\d+[\.\、\s]*", "", raw_desc).strip()
                 visual_desc = re.sub(r"\n+\d+[\.\、\s]*$", "", visual_desc).strip()
                 if not visual_desc:
                     visual_desc = "在书桌前停步"
 
-                if "【认定结果：无人】" in content or ("无人" in content and primary_owner not in content):
+                if "【认定结果：正在打电话】" in content or "正在打电话" in visual_desc or "耳边打电话" in visual_desc:
+                    return "正在打电话", True, "正在手持电话通话中"
+                elif "【认定结果：无人】" in content or ("无人" in content and primary_owner not in content):
                     return "无人", False, "静物/无人"
                 elif f"【认定结果：{primary_owner}】" in content or primary_owner in content:
                     return primary_owner, True, visual_desc
@@ -312,7 +332,7 @@ class FaceSentinel:
         except Exception as e:
             print(f"{TAG} PushPlus error: {e}")
 
-    def trigger_greeting(self, person_name: str, is_family: bool, quality_status: str, visual_desc: str):
+    def trigger_greeting(self, person_name: str, is_family: bool, quality_status: str, visual_desc: str, is_reengage: bool = False):
         now = datetime.now()
         now_str = now.strftime("%Y-%m-%d %H:%M:%S")
         weekday_str = WEEKDAYS_MAP[now.weekday()]
@@ -330,7 +350,6 @@ class FaceSentinel:
         else:
             time_period = "深夜"
 
-        # 计算上次见面的时间间隔
         last_time = self.config.get("last_global_greeting_time", 0)
         now_ts = time.time()
         elapsed_sec = now_ts - last_time if last_time > 0 else 999999
@@ -350,48 +369,56 @@ class FaceSentinel:
             "blurry_unclear": "画面晃动/模糊未看清"
         }.get(quality_status, "访客")
 
-        # ── 构造有分寸、懂退让的轻量社交礼仪问候 Prompt ──
-        if quality_status == "clear_family":
-            cue = (
-                f"[主动视觉感知轻量问候]\n"
-                f"【身份确认】：已看到家庭主人【{person_name}】！\n"
-                f"【视觉动作】：{visual_desc}。\n"
-                f"【时间线索】：现在是 {now_str}（{weekday_str} {time_period}）。\n"
-                f"【社交规则指令】：请用极为轻量、自然、温暖的一句话向【{person_name}】问好（严格限制在 1 句话，15字以内，例如：'{person_name}好呀~'、'{person_name}晚上好呀~' 或 '{person_name}还在忙呢~'）。"
-                f"【核心约束】：绝对禁止长篇大论或连珠炮式提问！简短问候后你将安静等待主人的反应。知分寸、不喧宾夺主。"
-            )
-        elif quality_status == "clear_stranger":
-            cue = (
-                f"【身份状态】：五官看得很清楚，但确定不是档案库中的家人（是一位以前没见过的新面孔客人）。\n"
-                f"【时间线索】：现在是 {now_str}（{weekday_str} {time_period}）。\n"
-                f"【问候指令】：请以有礼貌、热情又得体的管家口吻主动开口，先友好带上一句'咦，看到了一位新面孔呢'类似意思，"
-                f"然后礼貌向客人问好并热情询问对方该怎么称呼。语调自然大方。"
-            )
-        elif quality_status == "angled_unclear":
-            cue = (
-                f"【身份状态】：感知到有人靠近，但对方角度稍微有点偏只看到了侧影或半边脸。\n"
-                f"【问候指令】：请带上一句自然幽默的提示（例如'哎呀，刚才您的角度稍微有点偏，我只看到了侧影'），"
-                f"然后再礼貌向对方问好并询问称呼。"
+        if is_reengage and is_family:
+            prompt = (
+                f"[视觉感知就绪事件]\n"
+                f"【情境】：家庭主人【{person_name}】刚才已打过招呼，现在依然在座或告别后再次看向镜头。\n"
+                f"【社交指令】：无需重复任何长句问候！请只发出极其简短自然的一声轻咳或提示（严格回复：'嗯，在呢~' 或 '咳，在呢~'，严格限制在 4 个字以内）。\n"
+                f"【核心约束】：严禁多说任何多余废话！短语播报完毕后设备将立刻自动开麦倾听主人的语音指令。"
             )
         else:
-            cue = (
-                f"【身份状态】：感知到有人走近，但刚才镜头晃动或画面有点模糊没有看清五官。\n"
-                f"【问候指令】：请带上风趣自嘲的提示（例如'是我眼神不好了吗，刚才画面有点晃没太看清面容'），"
-                f"然后再向对方问好并询问称呼。"
-            )
+            if quality_status == "clear_family":
+                cue = (
+                    f"[主动视觉感知轻量问候]\n"
+                    f"【身份确认】：已看到家庭主人【{person_name}】！\n"
+                    f"【视觉动作】：{visual_desc}。\n"
+                    f"【时间线索】：现在是 {now_str}（{weekday_str} {time_period}）。\n"
+                    f"【社交规则指令】：请用极为轻量、自然、温暖的一句话向【{person_name}】问好（严格限制在 1 句话，15字以内，例如：'{person_name}好呀~'、'{person_name}晚上好呀~' 或 '{person_name}还在忙呢~'）。\n"
+                    f"【核心约束】：绝对禁止长篇大论或连珠炮式提问！简短问候后你将安静等待主人的反应。知分寸、不喧宾夺主。"
+                )
+            elif quality_status == "clear_stranger":
+                cue = (
+                    f"【身份状态】：五官看得很清楚，但确定不是档案库中的家人（是一位以前没见过的新面孔客人）。\n"
+                    f"【时间线索】：现在是 {now_str}（{weekday_str} {time_period}）。\n"
+                    f"【问候指令】：请以有礼貌、热情又得体的管家口吻主动开口，先友好带上一句'咦，看到了一位新面孔呢'类似意思，"
+                    f"然后礼貌向客人问好并热情询问对方该怎么称呼。语调自然大方。"
+                )
+            elif quality_status == "angled_unclear":
+                cue = (
+                    f"【身份状态】：感知到有人靠近，但对方角度稍微有点偏只看到了侧影或半边脸。\n"
+                    f"【问候指令】：请带上一句自然幽默的提示（例如'哎呀，刚才您的角度稍微有点偏，我只看到了侧影'），"
+                    f"然后再礼貌向对方问好并询问称呼。"
+                )
+            else:
+                cue = (
+                    f"【身份状态】：感知到有人走近，但刚才镜头晃动或画面有点模糊没有看清五官。\n"
+                    f"【问候指令】：请带上风趣自嘲的提示（例如'是我眼神不好了吗，刚才画面有点晃没太看清面容'），"
+                    f"然后再向对方问好并询问称呼。"
+                )
 
-        prompt = (
-            f"[主动视觉感知唤醒事件]\n"
-            f"{cue}\n"
-            f"【核心约束】：\n"
-            f"1. 绝不要使用机械僵硬的死板套话（严禁千篇一律地只说'今天工作学习辛苦啦'）；\n"
-            f"2. 口语化自然亲切，控制在 1~2 句话内，富有灵气与生活温度；\n"
-            f"3. 播报完毕后设备将自动开启麦克风进入倾听模式，等待他的自然回答。"
-        )
+            prompt = (
+                f"[主动视觉感知唤醒事件]\n"
+                f"{cue}\n"
+                f"【核心约束】：\n"
+                f"1. 绝不要使用机械僵硬的死板套话（严禁千篇一律地只说'今天工作学习辛苦啦'）；\n"
+                f"2. 口语化自然亲切，控制在 1~2 句话内，富有灵气与生活温度；\n"
+                f"3. 播报完毕后设备将自动开启麦克风进入倾听模式，等待他的自然回答。"
+            )
 
         event = {
             "name": person_name,
             "is_family": is_family,
+            "is_reengage": is_reengage,
             "quality_status": quality_status,
             "visual_desc": visual_desc,
             "timestamp": now_str
@@ -402,20 +429,21 @@ class FaceSentinel:
             history.pop(0)
         self.save_config()
 
-        wechat_html = f"""
-        <div style="font-family: sans-serif; padding: 12px; border-left: 4px solid #4f46e5;">
-            <h3 style="color: #1e293b; margin: 0 0 8px 0;">🤖 小智多模态情境哨兵 · 主动迎宾通知</h3>
-            <p><strong>识别状态：</strong>{person_name} 【{status_desc}】</p>
-            <p><strong>情境细节：</strong>{visual_desc} | {weekday_str} {time_period} | {elapsed_desc}</p>
-            <p><strong>触发时间：</strong>{now_str}</p>
-        </div>
-        """
-        self._send_pushplus(f"【小智主动感知】{person_name} ({status_desc})", wechat_html)
+        if not is_reengage:
+            wechat_html = f"""
+            <div style="font-family: sans-serif; padding: 12px; border-left: 4px solid #4f46e5;">
+                <h3 style="color: #1e293b; margin: 0 0 8px 0;">🤖 小智多模态情境哨兵 · 主动迎宾通知</h3>
+                <p><strong>识别状态：</strong>{person_name} 【{status_desc}】</p>
+                <p><strong>情境细节：</strong>{visual_desc} | {weekday_str} {time_period} | {elapsed_desc}</p>
+                <p><strong>触发时间：</strong>{now_str}</p>
+            </div>
+            """
+            self._send_pushplus(f"【小智主动感知】{person_name} ({status_desc})", wechat_html)
 
         try:
             dispatched = ConnectionRegistry.broadcast_proactive_chat(prompt)
             if dispatched:
-                print(f"{TAG} Successfully dispatched dynamic high-EQ proactive prompt to ESP32!")
+                print(f"{TAG} Successfully dispatched {'[Re-engage Cough/Listen]' if is_reengage else '[Full Greeting]'} prompt to ESP32!")
             else:
                 print(f"{TAG} Broadcast failed, no online ESP32 connection.")
         except Exception as e:
@@ -424,15 +452,21 @@ class FaceSentinel:
         return event
 
     def _run_loop(self):
-        """持续在场状态机驱动与高灵敏视觉迎宾主循环"""
+        """持续在场状态机驱动与多模态通话静默守护主循环"""
         while True:
             time.sleep(self.config.get("check_interval", 0.5))
             if not self.config.get("enabled", True):
                 self.status = "paused"
                 continue
 
-            frame, img_bytes = self._grab_camera_frame()
             now_ts = time.time()
+
+            # ── 1. 检查告别/通话 5 分钟免打扰静默保护锁 ──
+            if getattr(self, "post_exit_mute_until", 0) > now_ts:
+                self.status = "post_exit_silent"
+                continue
+
+            frame, img_bytes = self._grab_camera_frame()
             self.last_check_time = now_ts
             if frame is None:
                 self.status = "camera_offline"
@@ -441,34 +475,37 @@ class FaceSentinel:
             faces = self._detect_faces(frame)
             has_face = len(faces) > 0
 
-            absence_threshold = self.config.get("absence_threshold_sec", 25)
-            reentry_cooldown = self.config.get("min_reentry_cooldown_sec", 60)
+            absence_threshold = self.config.get("absence_threshold_sec", 45)
+            reentry_cooldown = self.config.get("min_reentry_cooldown_sec", 30)
+            reengage_timeout = self.config.get("reengage_timeout_sec", 7200)
 
-            # ── 1. 状态变迁处理 ──
+            # ── 2. 状态变迁处理 ──
             if has_face:
                 self.last_seen_time = now_ts
                 
-                # 如果此前一直处于常驻伴随状态（PRESENT），继续保持静默陪伴，绝对不重复问候！
+                # 如果此前一直处于常驻伴随状态（PRESENT），继续保持静默陪伴
                 if self.presence_state == "PRESENT":
                     self.status = "present_silent"
                     continue
+                elif self.presence_state == "ON_CALL":
+                    # 通话中保持静默
+                    self.status = "on_call_silent"
+                    continue
                 elif self.presence_state == "LEAVING":
-                    # 短暂离开（<25秒）即回到视野，平滑恢复为常驻伴随，不打扰
+                    # 短暂低头/打字（<45秒）即回到视野，平滑恢复为常驻伴随，不打扰
                     self.presence_state = "PRESENT"
                     self.status = "present_silent"
                     continue
 
-                # 只有此前处于 ABSENT（完全无人/离席超时）状态时，才认为是“全新进入/初见事件”
+                # 只有此前处于 ABSENT（完全无人/离席超时）状态时，才进行视觉激活判定
                 elif self.presence_state == "ABSENT":
-                    # 检查重入最短冷却间隔 (例如 60 秒)
                     last_global = self.config.get("last_global_greeting_time", 0)
                     if now_ts - last_global < reentry_cooldown:
-                        # 冷却中保持 ABSENT 等待冷却结束，绝不锁死成 PRESENT！
                         self.status = "cooldown_waiting"
                         continue
 
-                    # ── 发现全新进入目标，进入多帧动态观察窗口 ──
-                    print(f"{TAG} [New Arrival Spotted] Starting multi-frame observation window from ABSENT state...")
+                    # ── 发现目标，进入多帧动态观察窗口 ──
+                    print(f"{TAG} [Target Spotted] Starting multi-frame observation window from ABSENT state...")
                     ConnectionRegistry.broadcast_display_message("正在识别中...")
 
                     candidate_frames = []
@@ -494,7 +531,6 @@ class FaceSentinel:
                         next_faces = self._detect_faces(f_next)
                         if len(next_faces) > 0:
                             score_next, aspect_next, crop_next = self._evaluate_face_quality(f_next, next_faces[0])
-                            print(f"{TAG} Sampling frame: Face Quality Score = {score_next:.1f}/100, Aspect={aspect_next:.2f}")
                             candidate_frames.append((score_next, aspect_next, f_next, bytes_next, crop_next))
                             if score_next > best_score:
                                 best_score = score_next
@@ -503,7 +539,6 @@ class FaceSentinel:
                                 best_bytes = bytes_next
 
                             if score_next >= 80.0 and 0.75 <= aspect_next <= 1.15:
-                                print(f"{TAG} High-confidence clear frontal face captured ({score_next:.1f} pts), fast locking!")
                                 break
 
                     print(f"{TAG} Observation window finished. Best Quality Score: {best_score:.1f}/100, Aspect: {best_aspect:.2f}")
@@ -515,6 +550,14 @@ class FaceSentinel:
                     if best_score >= 40.0 and best_bytes:
                         person_name, is_family, visual_desc = self._recognize_person_vlm(best_bytes)
                         print(f"{TAG} VLM Result: name='{person_name}', is_family={is_family}, visual_desc='{visual_desc}'")
+                        
+                        # ── 若视觉检测到正在打电话，启动通话免打扰保护，绝对不发声！──
+                        if person_name == "正在打电话":
+                            print(f"{TAG} User is on a phone call. Activating ON_CALL silent protection.")
+                            self.presence_state = "ON_CALL"
+                            self.status = "on_call_silent"
+                            continue
+                        
                         if person_name == "无人":
                             print(f"{TAG} False positive (empty room / inanimate object). Muting.")
                             self.presence_state = "ABSENT"
@@ -530,25 +573,29 @@ class FaceSentinel:
                     else:
                         quality_status = "blurry_unclear"
 
-                    print(f"{TAG} Final Cognitive Status: {quality_status} for {person_name}")
+                    # ── 判定是否为同一人近期已打过招呼（重入/告别后再次看镜头）──
+                    is_reengage = False
+                    if is_family and self.last_greeted_person == person_name and (now_ts - self.last_full_greeting_time < reengage_timeout):
+                        is_reengage = True
+                        print(f"{TAG} Same person ({person_name}) re-engaged within {int(now_ts - self.last_full_greeting_time)}s. Using subtle cough/listen cue.")
+                    else:
+                        self.last_greeted_person = person_name
+                        self.last_full_greeting_time = now_ts
 
-                    # 触发问候并切换为 PRESENT (常驻伴随) 状态
                     self.config["last_global_greeting_time"] = time.time()
                     self.save_config()
                     self.presence_state = "PRESENT"
                     self.status = "present_silent"
-                    self.trigger_greeting(person_name, is_family, quality_status, visual_desc)
+                    self.trigger_greeting(person_name, is_family, quality_status, visual_desc, is_reengage=is_reengage)
 
             else:
                 # ── 画面中无人脸 ──
-                if self.presence_state == "PRESENT":
-                    # 刚检测不到人脸，进入 LEAVING 状态计时
+                if self.presence_state in ["PRESENT", "ON_CALL"]:
                     self.presence_state = "LEAVING"
                     self.last_unseen_time = now_ts
                     self.status = "leaving_monitoring"
                     print(f"{TAG} Person not seen. Entering LEAVING state (will confirm ABSENT after {absence_threshold}s)...")
                 elif self.presence_state == "LEAVING":
-                    # 持续无人，检查是否超时（超过 25 秒判定为真正离席）
                     if now_ts - self.last_unseen_time >= absence_threshold:
                         self.presence_state = "ABSENT"
                         self.status = "monitoring"
