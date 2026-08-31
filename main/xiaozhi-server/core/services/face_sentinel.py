@@ -1,7 +1,8 @@
-import os
+﻿import os
 import time
 import json
 import base64
+import re
 import threading
 import urllib.request
 import urllib.error
@@ -53,21 +54,29 @@ class FaceSentinel:
             "enabled": True,
             "camera_url": "http://100.122.149.94:8080/shot.jpg",
             "check_interval": 0.5,
-            "cooldown_minutes": 20,
+            "absence_threshold_sec": 90,  # 连续 90 秒未见人判定为真正离席
+            "min_reentry_cooldown_sec": 180,  # 离席后重入触发问候的最短间隔 (3分钟)
             "wechat_notify": True,
             "greet_stranger": True,
             "last_global_greeting_time": 0,
             "greeting_history": []
         }
         self.load_config()
-        self.status = "idle"
+        self.status = "monitoring"
+        
+        # ── 在场状态机 (Presence State Machine) ──
+        # 状态值: "ABSENT" (离席无人) | "PRESENT" (常驻在场静默) | "LEAVING" (疑似离开观察中)
+        self.presence_state = "ABSENT"
+        self.last_seen_time = 0
+        self.last_unseen_time = time.time()
         self.last_check_time = 0
+        
         self.cascades = []
         self._init_cascades()
         
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.worker_thread.start()
-        print(f"{TAG} v1.2.0-dynamic-context Sentinel Started: Multi-Modal Intelligent Context Engine Active.")
+        print(f"{TAG} v2.0.0 Sentinel Started: Presence & Re-entry State Machine Active.")
 
     def _init_cascades(self):
         paths = [
@@ -94,9 +103,14 @@ class FaceSentinel:
                 print(f"{TAG} Failed to load config: {e}")
 
     def get_status(self):
+        now_ts = time.time()
+        absence_sec = int(now_ts - self.last_seen_time) if self.last_seen_time > 0 else 9999
         return {
             "enabled": self.config.get("enabled", True),
             "status": getattr(self, "status", "monitoring"),
+            "presence_state": getattr(self, "presence_state", "ABSENT"),
+            "absence_seconds": absence_sec,
+            "last_seen_time": getattr(self, "last_seen_time", 0),
             "last_check_time": getattr(self, "last_check_time", 0),
             "config": self.config
         }
@@ -213,7 +227,7 @@ class FaceSentinel:
 
             if ref_b64:
                 prompt = f"""请对比图 1（家庭主人【{primary_owner}】标准档案照片）与图 2（摄像头抓拍画面）：
-1. 观察图 2 中人物的动作、姿态、衣着/神态细节，用简短一句话描述（如'在桌前自拍'、'戴着眼镜神态放松'、'正在忙碌'等）；
+1. 观察图 2 中人物的动作、姿态、衣着或神态细节，用简短一句话描述（如'在桌前自拍'、'戴着眼镜神态放松'、'正在忙碌'等）；
 2. 比对两张图片中人物的五官面容。若画面中根本没有人脸或只是家具/静物/被褥，请在最后一行输出：【认定结果：无人】；若特征与图1基本吻合，输出：【认定结果：{primary_owner}】；若明确是陌生真人面孔，输出：【认定结果：访客朋友】。
 """
                 content_payload = [
@@ -244,12 +258,14 @@ class FaceSentinel:
                 content = result_json["choices"][0]["message"]["content"].strip()
                 print(f"{TAG} VLM Raw Output: {content}")
                 
-                # 提取视觉观察描述
-                visual_desc = content.split("【认定结果")[0].strip() if "【认定结果" in content else "正在摄像头面前"
+                # 提取并清理视觉观察描述 (去掉 1. 2. 等标号残留)
+                raw_desc = content.split("【认定结果")[0].strip() if "【认定结果" in content else "正在摄像头面前"
+                visual_desc = re.sub(r"^\d+[\.\、\s]*", "", raw_desc).strip()
+                visual_desc = re.sub(r"\n+\d+[\.\、\s]*$", "", visual_desc).strip()
                 if not visual_desc:
                     visual_desc = "在书桌前停步"
 
-                if "【认定结果：无人】" in content or "无人" in content and primary_owner not in content:
+                if "【认定结果：无人】" in content or ("无人" in content and primary_owner not in content):
                     return "无人", False, "静物/无人"
                 elif f"【认定结果：{primary_owner}】" in content or primary_owner in content:
                     return primary_owner, True, visual_desc
@@ -392,7 +408,7 @@ class FaceSentinel:
         return event
 
     def _run_loop(self):
-        """持续多帧分析与面部画质优选主循环"""
+        """持续在场状态机驱动与视觉迎宾主循环"""
         while True:
             time.sleep(self.config.get("check_interval", 0.5))
             if not self.config.get("enabled", True):
@@ -400,86 +416,128 @@ class FaceSentinel:
                 continue
 
             frame, img_bytes = self._grab_camera_frame()
-            self.last_check_time = time.time()
+            now_ts = time.time()
+            self.last_check_time = now_ts
             if frame is None:
                 self.status = "camera_offline"
                 continue
 
             faces = self._detect_faces(frame)
-            if len(faces) == 0:
-                self.status = "monitoring"
-                continue
+            has_face = len(faces) > 0
 
-            # 检查全局冷却
-            cooldown_sec = max(15, self.config.get("cooldown_minutes", 20)) * 60
-            now_ts = time.time()
-            last_global = self.config.get("last_global_greeting_time", 0)
-            remaining = max(0, int(cooldown_sec - (now_ts - last_global)))
-            if remaining > 0:
-                continue
+            absence_threshold = self.config.get("absence_threshold_sec", 90)
+            reentry_cooldown = self.config.get("min_reentry_cooldown_sec", 180)
 
-            # ── 发现目标，进入多帧动态观察窗口 ──
-            print(f"{TAG} [Target Spotted] Entering multi-frame quality observation window...")
-            ConnectionRegistry.broadcast_display_message("正在识别中...")
-
-            candidate_frames = []
-            obs_start = time.time()
-            best_score = 0.0
-            best_aspect = 1.0
-            best_crop = None
-            best_bytes = img_bytes
-
-            q_score, aspect, crop = self._evaluate_face_quality(frame, faces[0])
-            candidate_frames.append((q_score, aspect, frame, img_bytes, crop))
-            if q_score > best_score:
-                best_score = q_score
-                best_aspect = aspect
-                best_crop = crop
-                best_bytes = img_bytes
-
-            while time.time() - obs_start < 1.8:
-                time.sleep(0.35)
-                f_next, bytes_next = self._grab_camera_frame()
-                if f_next is None:
+            # ── 1. 状态变迁处理 ──
+            if has_face:
+                self.last_seen_time = now_ts
+                
+                # 如果此前一直处于常驻伴随状态（PRESENT），继续保持静默陪伴，绝对不重复问候！
+                if self.presence_state == "PRESENT":
+                    self.status = "present_silent"
                     continue
-                next_faces = self._detect_faces(f_next)
-                if len(next_faces) > 0:
-                    score_next, aspect_next, crop_next = self._evaluate_face_quality(f_next, next_faces[0])
-                    print(f"{TAG} Sampling frame: Face Quality Score = {score_next:.1f}/100, Aspect={aspect_next:.2f}")
-                    candidate_frames.append((score_next, aspect_next, f_next, bytes_next, crop_next))
-                    if score_next > best_score:
-                        best_score = score_next
-                        best_aspect = aspect_next
-                        best_crop = crop_next
-                        best_bytes = bytes_next
-
-                    if score_next >= 85.0 and 0.75 <= aspect_next <= 1.15:
-                        print(f"{TAG} High-confidence clear frontal face captured ({score_next:.1f} pts), fast locking!")
-                        break
-
-            print(f"{TAG} Observation window finished. Best Quality Score: {best_score:.1f}/100, Aspect: {best_aspect:.2f}")
-
-            person_name = "访客朋友"
-            is_family = False
-            visual_desc = "在书桌前停步"
-
-            if best_score >= 45.0 and best_bytes:
-                person_name, is_family, visual_desc = self._recognize_person_vlm(best_bytes)
-                print(f"{TAG} VLM Result: name='{person_name}', is_family={is_family}, visual_desc='{visual_desc}'")
-                if person_name == "无人":
+                elif self.presence_state == "LEAVING":
+                    # 短暂离席（<90秒）即重新回到视野，平滑恢复为常驻伴随，不打扰
+                    print(f"{TAG} Short absence resolved within {int(now_ts - self.last_unseen_time)}s. Restoring to PRESENT (silent).")
+                    self.presence_state = "PRESENT"
+                    self.status = "present_silent"
                     continue
 
-            if is_family:
-                quality_status = "clear_family"
-            elif best_score >= 45.0 and 0.70 <= best_aspect <= 1.25:
-                quality_status = "clear_stranger"
-            elif best_aspect < 0.70 or best_aspect > 1.25:
-                quality_status = "angled_unclear"
+                # 只有此前处于 ABSENT（完全无人/离席超时）状态时，才认为是“全新进入/初见事件”
+                elif self.presence_state == "ABSENT":
+                    # 检查重入最短冷却间隔
+                    last_global = self.config.get("last_global_greeting_time", 0)
+                    if now_ts - last_global < reentry_cooldown:
+                        print(f"{TAG} Re-entry within cooldown ({int(now_ts - last_global)}s < {reentry_cooldown}s), muting.")
+                        self.presence_state = "PRESENT"
+                        self.status = "present_silent"
+                        continue
+
+                    # ── 发现全新进入目标，进入多帧动态观察窗口 ──
+                    print(f"{TAG} [New Arrival Spotted] Starting multi-frame observation window from ABSENT state...")
+                    ConnectionRegistry.broadcast_display_message("正在识别中...")
+
+                    candidate_frames = []
+                    obs_start = time.time()
+                    best_score = 0.0
+                    best_aspect = 1.0
+                    best_crop = None
+                    best_bytes = img_bytes
+
+                    q_score, aspect, crop = self._evaluate_face_quality(frame, faces[0])
+                    candidate_frames.append((q_score, aspect, frame, img_bytes, crop))
+                    if q_score > best_score:
+                        best_score = q_score
+                        best_aspect = aspect
+                        best_crop = crop
+                        best_bytes = img_bytes
+
+                    while time.time() - obs_start < 1.8:
+                        time.sleep(0.35)
+                        f_next, bytes_next = self._grab_camera_frame()
+                        if f_next is None:
+                            continue
+                        next_faces = self._detect_faces(f_next)
+                        if len(next_faces) > 0:
+                            score_next, aspect_next, crop_next = self._evaluate_face_quality(f_next, next_faces[0])
+                            print(f"{TAG} Sampling frame: Face Quality Score = {score_next:.1f}/100, Aspect={aspect_next:.2f}")
+                            candidate_frames.append((score_next, aspect_next, f_next, bytes_next, crop_next))
+                            if score_next > best_score:
+                                best_score = score_next
+                                best_aspect = aspect_next
+                                best_crop = crop_next
+                                best_bytes = bytes_next
+
+                            if score_next >= 85.0 and 0.75 <= aspect_next <= 1.15:
+                                print(f"{TAG} High-confidence clear frontal face captured ({score_next:.1f} pts), fast locking!")
+                                break
+
+                    print(f"{TAG} Observation window finished. Best Quality Score: {best_score:.1f}/100, Aspect: {best_aspect:.2f}")
+
+                    person_name = "访客朋友"
+                    is_family = False
+                    visual_desc = "在书桌前停步"
+
+                    if best_score >= 45.0 and best_bytes:
+                        person_name, is_family, visual_desc = self._recognize_person_vlm(best_bytes)
+                        print(f"{TAG} VLM Result: name='{person_name}', is_family={is_family}, visual_desc='{visual_desc}'")
+                        if person_name == "无人":
+                            print(f"{TAG} False positive (empty room / inanimate object). Muting.")
+                            self.presence_state = "ABSENT"
+                            self.status = "monitoring"
+                            continue
+
+                    if is_family:
+                        quality_status = "clear_family"
+                    elif best_score >= 45.0 and 0.70 <= best_aspect <= 1.25:
+                        quality_status = "clear_stranger"
+                    elif best_aspect < 0.70 or best_aspect > 1.25:
+                        quality_status = "angled_unclear"
+                    else:
+                        quality_status = "blurry_unclear"
+
+                    print(f"{TAG} Final Cognitive Status: {quality_status} for {person_name}")
+
+                    # 触发问候并切换为 PRESENT (常驻伴随) 状态
+                    self.config["last_global_greeting_time"] = time.time()
+                    self.save_config()
+                    self.presence_state = "PRESENT"
+                    self.status = "present_silent"
+                    self.trigger_greeting(person_name, is_family, quality_status, visual_desc)
+
             else:
-                quality_status = "blurry_unclear"
-
-            print(f"{TAG} Final Cognitive Status: {quality_status} for {person_name}")
-
-            self.config["last_global_greeting_time"] = time.time()
-            self.save_config()
-            self.trigger_greeting(person_name, is_family, quality_status, visual_desc)
+                # ── 画面中无人脸 ──
+                if self.presence_state == "PRESENT":
+                    # 刚检测不到人脸，进入 LEAVING 状态计时
+                    self.presence_state = "LEAVING"
+                    self.last_unseen_time = now_ts
+                    self.status = "leaving_monitoring"
+                    print(f"{TAG} Person not seen. Entering LEAVING state (will confirm ABSENT after {absence_threshold}s)...")
+                elif self.presence_state == "LEAVING":
+                    # 持续无人，检查是否超时（超过 90 秒判定为真正离席）
+                    if now_ts - self.last_unseen_time >= absence_threshold:
+                        self.presence_state = "ABSENT"
+                        self.status = "monitoring"
+                        print(f"{TAG} Absence threshold reached ({absence_threshold}s). State transitioned to ABSENT.")
+                else:
+                    self.status = "monitoring"
