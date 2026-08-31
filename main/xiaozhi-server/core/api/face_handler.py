@@ -167,6 +167,58 @@ class FaceWebHandler:
         except Exception as e:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
 
+    async def handle_camera_preview(self, request):
+        source = request.query.get("source", "s20")
+        if source == "s20":
+            url = f"{S20_HOST}/shot.jpg"
+        elif source == "esp32":
+            url = "http://192.168.1.13/shot.jpg"
+        else:
+            url = source
+
+        try:
+            resp = await asyncio.to_thread(requests.get, url, timeout=4)
+            if resp.status_code == 200:
+                return web.Response(
+                    body=resp.content,
+                    content_type="image/jpeg",
+                    headers={
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "Access-Control-Allow-Origin": "*"
+                    }
+                )
+            return web.Response(text=f"Upstream status: {resp.status_code}", status=resp.status_code)
+        except Exception as e:
+            return web.Response(text=f"Camera proxy error: {e}", status=502)
+
+    async def handle_camera_stream(self, request):
+        source = request.query.get("source", "s20")
+        if source == "s20":
+            url = f"{S20_HOST}/video"
+        elif source == "esp32":
+            url = "http://192.168.1.13/stream"
+        else:
+            url = source
+
+        try:
+            r = requests.get(url, stream=True, timeout=5)
+            content_type = r.headers.get("Content-Type", "multipart/x-mixed-replace;boundary=boundarydonotcross")
+            response = web.StreamResponse(
+                status=r.status_code,
+                headers={
+                    "Content-Type": content_type,
+                    "Access-Control-Allow-Origin": "*",
+                    "Cache-Control": "no-cache"
+                }
+            )
+            await response.prepare(request)
+            for chunk in r.iter_content(chunk_size=4096):
+                if chunk:
+                    await response.write(chunk)
+            return response
+        except Exception as e:
+            return web.Response(text=f"Stream error: {e}", status=502)
+
     async def handle_s20_status(self, request):
         try:
             resp = requests.get(f"{S20_HOST}/status.json", timeout=2)

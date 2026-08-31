@@ -272,9 +272,16 @@ class MusicWebHandler:
             from core.providers.tts.dto.dto import ContentType, TTSMessageDTO, SentenceType
             import uuid
 
+            from core.handle.sendAudioHandle import send_tts_message
             for conn in active_conns:
                 try:
+                    conn.client_abort = False
                     conn.sentence_id = str(uuid.uuid4().hex)
+                    import asyncio
+                    asyncio.run_coroutine_threadsafe(
+                        send_tts_message(conn, "start"),
+                        conn.loop
+                    )
                     conn.tts.store_tts_text(conn.sentence_id, prompt_text)
                     conn.tts.tts_text_queue.put(
                         TTSMessageDTO(

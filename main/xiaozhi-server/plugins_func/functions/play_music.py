@@ -252,16 +252,15 @@ async def play_music(conn: "ConnectionHandler", song_name: str):
             ]
         prompt_text = random.choice(prompts)
         
-        # 5. 推送 TTS 引导语 + 完整音乐流至 ESP32
+        # 5. 推送 TTS 引导语 + 完整音乐流至 ESP32 (无论何种 Intent 均完整下发 FIRST 和 LAST 消息)
         conn.tts.store_tts_text(conn.sentence_id, prompt_text)
-        if conn.intent_type == "intent_llm":
-            conn.tts.tts_text_queue.put(
-                TTSMessageDTO(
-                    sentence_id=conn.sentence_id,
-                    sentence_type=SentenceType.FIRST,
-                    content_type=ContentType.ACTION,
-                )
+        conn.tts.tts_text_queue.put(
+            TTSMessageDTO(
+                sentence_id=conn.sentence_id,
+                sentence_type=SentenceType.FIRST,
+                content_type=ContentType.ACTION,
             )
+        )
         conn.tts.tts_text_queue.put(
             TTSMessageDTO(
                 sentence_id=conn.sentence_id,
@@ -278,14 +277,13 @@ async def play_music(conn: "ConnectionHandler", song_name: str):
                 content_file=music_file_to_play,
             )
         )
-        if conn.intent_type == "intent_llm":
-            conn.tts.tts_text_queue.put(
-                TTSMessageDTO(
-                    sentence_id=conn.sentence_id,
-                    sentence_type=SentenceType.LAST,
-                    content_type=ContentType.ACTION,
-                )
+        conn.tts.tts_text_queue.put(
+            TTSMessageDTO(
+                sentence_id=conn.sentence_id,
+                sentence_type=SentenceType.LAST,
+                content_type=ContentType.ACTION,
             )
+        )
 
         return ActionResponse(
             action=Action.RECORD, result="指令已接收", response=prompt_text

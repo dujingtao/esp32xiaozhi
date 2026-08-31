@@ -40,7 +40,7 @@
                 <div>
                     <div class="flex items-center gap-2">
                         <h1 class="text-lg font-extrabold text-slate-900 leading-tight tracking-tight">小智 AI 全能智控中枢</h1>
-                        <span class="px-2 py-0.5 text-[10px] font-bold tracking-wide rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200">v2.6.0</span>
+                        <span class="px-2 py-0.5 text-[10px] font-bold tracking-wide rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200">v2.8.0</span>
                     </div>
                     <p class="text-xs text-slate-500">视觉哨兵 · 音乐曲库 · 邮件通讯录 · 多模态管理</p>
                 </div>
@@ -107,33 +107,52 @@
         <section id="pane-faces" class="tab-pane active space-y-6">
             <!-- 视觉概览卡片 -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- S20 实时取景窗口 -->
+                <!-- 实时取景与多摄像头监控窗口 -->
                 <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
                     <div>
                         <div class="flex items-center justify-between mb-3">
                             <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
                                 <i class="fa-solid fa-video text-indigo-600"></i>
-                                三星 S20 实时取景窗口
+                                实时监控取景
                             </h2>
-                            <span id="s20-status-pill" class="px-2.5 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
-                                正在连接
-                            </span>
+                            <div class="flex items-center gap-2">
+                                <select id="cam-selector" onchange="switchActiveCamera()" class="text-xs bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                    <option value="esp32s3">📷 ESP32-S3-CAM (192.168.1.13)</option>
+                                    <option value="s20">📱 三星 S20 手机 (100.122.149.94)</option>
+                                </select>
+                                <span id="camera-status-pill" class="px-2.5 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
+                                    在线
+                                </span>
+                            </div>
                         </div>
                         <div class="relative bg-slate-900 rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-slate-800 shadow-inner group">
-                            <img id="camera-live-feed" src="http://100.122.149.94:8080/shot.jpg" alt="Live Camera" class="w-full h-full object-cover">
-                            <div class="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] text-white flex items-center gap-1">
-                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                                1080P IP Camera
+                            <img id="camera-live-feed" src="http://192.168.1.13/stream" alt="Live Camera" class="w-full h-full object-cover">
+                            <div id="cam-badge" class="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] text-white flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                ESP32-S3 OV5640 (25FPS)
                             </div>
                         </div>
                     </div>
-                    <div class="mt-4 flex gap-2">
-                        <button onclick="refreshCameraPreview()" class="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5">
-                            <i class="fa-solid fa-arrows-rotate"></i> 刷新取景
-                        </button>
-                        <button onclick="testCameraVLM()" class="flex-1 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold transition flex items-center justify-center gap-1.5 border border-indigo-200">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> 拍摄分析
-                        </button>
+                    <div class="mt-4 flex flex-col gap-2">
+                        <div class="flex gap-2">
+                            <button onclick="refreshCameraPreview()" class="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-arrows-rotate"></i> 刷新
+                            </button>
+                            <button onclick="toggleStreamMode()" id="btn-stream-toggle" class="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-play"></i> 实时流
+                            </button>
+                            <button onclick="testCameraVLM()" class="flex-1 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold transition flex items-center justify-center gap-1.5 border border-indigo-200">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> 拍摄分析
+                            </button>
+                        </div>
+                        <div id="esp32-controls" class="flex gap-2 pt-1 border-t border-slate-100">
+                            <button onclick="toggleLed(1)" class="flex-1 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold transition flex items-center justify-center gap-1 border border-amber-200">
+                                💡 开启补光灯
+                            </button>
+                            <button onclick="toggleLed(0)" class="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition flex items-center justify-center gap-1">
+                                🌑 关闭补光灯
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -476,9 +495,13 @@
                             <span class="text-slate-500">音频传输参数</span>
                             <span class="text-slate-800">Opus 16kHz Mono (60ms Frame)</span>
                         </div>
-                        <div class="flex justify-between py-2 border-b border-slate-100">
+                        <div class="flex items-center justify-between py-2 border-b border-slate-100">
                             <span class="text-slate-500">已加载工具数量</span>
-                            <span class="font-bold text-emerald-600">31 服务插件 + 10 硬件MCP工具</span>
+                            <button onclick="openToolsModal()" class="group flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold border border-emerald-200 text-xs transition-all shadow-sm hover:shadow active:scale-95 cursor-pointer" title="点击查看已加载的 41 项全能工具调用清单">
+                                <i class="fa-solid fa-cubes text-emerald-600 group-hover:rotate-12 transition-transform"></i>
+                                <span>31 服务插件 + 10 硬件MCP工具</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-emerald-500 ml-0.5"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -516,6 +539,77 @@
         </section>
 
     </main>
+
+    <!-- ======================================================== -->
+    <!-- 41 项全能意图与工具清单悬浮弹出视窗 (Tools Matrix Modal)  -->
+    <!-- ======================================================== -->
+    <div id="modal-tools-matrix" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-200" onclick="handleToolsModalBackdrop(event)">
+        <div class="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden transform scale-95 transition-all duration-200" id="modal-tools-container">
+            
+            <!-- Modal Header -->
+            <div class="p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400 shadow-inner">
+                        <i class="fa-solid fa-cubes text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold flex items-center gap-2">
+                            小智 AI 全能意图与工具中枢矩阵
+                            <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-mono font-semibold">41 Active Tools</span>
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-0.5">已挂载 31 项云端大脑服务插件 + 10 项 ESP32 板载硬件 MCP 工具，支持大模型零延迟意图调用与自主协同</p>
+                    </div>
+                </div>
+                <button onclick="closeToolsModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition" title="关闭窗口 (Esc)">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Filter & Search Toolbar -->
+            <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <!-- Filter Tabs -->
+                <div class="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 custom-scrollbar">
+                    <button onclick="filterTools('all')" id="tool-filter-all" class="tool-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm transition">
+                        🌟 全部 (41)
+                    </button>
+                    <button onclick="filterTools('server')" id="tool-filter-server" class="tool-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 transition">
+                        🌐 云端服务插件 (31)
+                    </button>
+                    <button onclick="filterTools('mcp')" id="tool-filter-mcp" class="tool-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 transition">
+                        ⚡ ESP32 硬件MCP (10)
+                    </button>
+                </div>
+
+                <!-- Search Input -->
+                <div class="relative w-full sm:w-64">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                    <input type="text" id="tool-search-input" oninput="searchTools(this.value)" placeholder="搜索工具名称、功能或指令..." class="w-full pl-8 pr-3 py-1.5 text-xs bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <!-- Tools Grid Content -->
+            <div class="p-5 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/50">
+                <div id="tools-grid-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    <!-- Dynamic Tool Cards Rendered by JS -->
+                </div>
+                <div id="tools-empty-state" class="hidden py-12 text-center text-slate-400 text-xs">
+                    <i class="fa-solid fa-box-open text-3xl text-slate-300 mb-2"></i>
+                    <p>没有找到符合搜索条件的工具</p>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 bg-white border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>所有工具均已通过 Function Calling 动态注入大模型 System Prompt</span>
+                </div>
+                <button onclick="closeToolsModal()" class="px-4 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition">
+                    关闭
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- 底部版权栏 -->
     <footer class="bg-white border-t border-slate-200 py-4 mt-auto">
@@ -611,9 +705,60 @@
             `).join('');
         }
 
+        let activeCam = 'esp32s3';
+        let isStreaming = true;
+
+        function switchActiveCamera() {
+            activeCam = document.getElementById('cam-selector').value;
+            const img = document.getElementById('camera-live-feed');
+            const badge = document.getElementById('cam-badge');
+            const espControls = document.getElementById('esp32-controls');
+
+            if (activeCam === 'esp32s3') {
+                img.src = 'http://192.168.1.13/stream';
+                badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ESP32-S3 OV5640 (25FPS)';
+                espControls.style.display = 'flex';
+                isStreaming = true;
+            } else {
+                img.src = '/api/faces/preview?source=s20&t=' + Date.now();
+                badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 三星 S20 1080P IP Camera';
+                espControls.style.display = 'none';
+                isStreaming = false;
+            }
+        }
+
         function refreshCameraPreview() {
             const img = document.getElementById('camera-live-feed');
-            img.src = 'http://100.122.149.94:8080/shot.jpg?t=' + Date.now();
+            if (activeCam === 'esp32s3') {
+                img.src = 'http://192.168.1.13/shot.jpg?t=' + Date.now();
+            } else {
+                img.src = '/api/faces/preview?source=s20&t=' + Date.now();
+            }
+            isStreaming = false;
+        }
+
+        function toggleStreamMode() {
+            const img = document.getElementById('camera-live-feed');
+            if (activeCam === 'esp32s3') {
+                img.src = 'http://192.168.1.13/stream';
+            } else {
+                img.src = '/api/faces/stream?source=s20';
+            }
+            isStreaming = true;
+        }
+
+        async function toggleLed(state) {
+            try {
+                await fetch(`http://192.168.1.13/led?state=${state}`, { mode: 'no-cors' });
+                Swal.fire({
+                    icon: 'success',
+                    title: state === 1 ? '💡 补光灯已开启' : '🌑 补光灯已关闭',
+                    timer: 1000,
+                    showConfirmButton: false
+                });
+            } catch (e) {
+                console.error(e);
+            }
         }
 
         async function testCameraVLM() {
@@ -983,6 +1128,182 @@
                     timer: 2000
                 });
             } catch (e) {}
+        }
+
+        // ── 41 项全能工具矩阵悬浮弹窗驱动 ──
+        const ALL_TOOLS = [
+            // 🌐 全网搜索与新闻 (3)
+            { id: 'web_search', type: 'server', typeName: '云端服务插件', category: '全网搜索', icon: 'fa-globe', iconColor: 'text-sky-500', name: '全网深度联网搜索与对比推理', desc: '并发检索 Bing News、DuckDuckGo 及权威信源，多方交叉对比与事实逻辑确认，智能排除谣言和过时信息。', prompt: '“今天有什么最新的重大科技新闻？” / “查一下国际金价”' },
+            { id: 'get_news_from_newsnow', type: 'server', typeName: '云端服务插件', category: '全网搜索', icon: 'fa-newspaper', iconColor: 'text-blue-500', name: '热点要闻聚合速递', desc: '秒级抓取澎湃新闻、百度热搜榜、财联社头条要闻并整理成摘要。', prompt: '“来条最新新闻” / “看看今天热搜”' },
+            { id: 'get_news_from_chinanews', type: 'server', typeName: '云端服务插件', category: '全网搜索', icon: 'fa-rss', iconColor: 'text-indigo-500', name: '中新网多品类新闻', desc: '获取中新网官方国际、科技、社会新闻权威报道。', prompt: '“播报今日国际新闻” / “科技新闻有什么”' },
+
+            // 👁️ 视觉感知与人脸记忆 (6)
+            { id: 'recognize_family_face', type: 'server', typeName: '云端服务插件', category: '视觉人脸', icon: 'fa-id-badge', iconColor: 'text-emerald-500', name: '视觉人物身份识别', desc: '调度三星 S20 手机镜头，高灵敏识别眼前站着的人物身份与称呼。', prompt: '“看看我是谁？” / “镜头前站着谁？”' },
+            { id: 'register_family_face', type: 'server', typeName: '云端服务插件', category: '视觉人脸', icon: 'fa-user-plus', iconColor: 'text-teal-500', name: '家庭成员人脸录入建档', desc: '通过摄像头抓拍当前画面，录入人脸特征与对应姓名，持久化存入人脸库。', prompt: '“记住这张脸，这是布布爸爸” / “录入人脸”' },
+            { id: 'list_family_faces', type: 'server', typeName: '云端服务插件', category: '视觉人脸', icon: 'fa-address-book', iconColor: 'text-cyan-500', name: '查询人脸记忆库', desc: '列出小智当前已记住和认识的所有家庭成员档案列表。', prompt: '“你都认识谁？” / “人脸库里有哪些人？”' },
+            { id: 'delete_family_face', type: 'server', typeName: '云端服务插件', category: '视觉人脸', icon: 'fa-user-minus', iconColor: 'text-rose-500', name: '删除指定人脸档案', desc: '从人脸记忆库中安全移除某个人物的人脸信息。', prompt: '“删除张三的人脸档案” / “忘记李四”' },
+            { id: 'see_through_phone_camera', type: 'server', typeName: '云端服务插件', category: '视觉感知', icon: 'fa-eye', iconColor: 'text-purple-500', name: '多模态视觉看世界 (VLM)', desc: '观察面前物品、作业题目、环境场景，调用 Gemini / 智谱大模型进行深度识物与解答。', prompt: '“看看我手里拿的是什么？” / “帮我看下这道题”' },
+            { id: 'control_phone_camera_torch', type: 'server', typeName: '云端服务插件', category: '视觉感知', icon: 'fa-bolt', iconColor: 'text-amber-500', name: '手机摄像头补光灯控制', desc: '远程打开或关闭三星 S20 手机摄像头的闪光灯/手电筒。', prompt: '“开灯看看” / “把手电筒关掉”' },
+
+            // 📧 邮件助手与通讯录 (4)
+            { id: 'send_email', type: 'server', typeName: '云端服务插件', category: '邮件通讯', icon: 'fa-paper-plane', iconColor: 'text-indigo-500', name: '智能邮件排版投递', desc: '通过企业级 Microsoft 365 发送格式规范、排版正式的电子邮件。', prompt: '“发封邮件给张总，说下周一开会”' },
+            { id: 'capture_and_email_photo', type: 'server', typeName: '云端服务插件', category: '邮件通讯', icon: 'fa-camera-retro', iconColor: 'text-pink-500', name: '实时拍照并邮件发送', desc: '自动通过摄像头抓拍当前 1080P 高清画面，并作为内嵌照片发送到用户指定邮箱。', prompt: '“拍张照片发到我邮箱”' },
+            { id: 'save_email_contact', type: 'server', typeName: '云端服务插件', category: '邮件通讯', icon: 'fa-user-check', iconColor: 'text-emerald-500', name: '记录邮箱联系人', desc: '将联系人姓名/称呼与邮箱地址保存至本地持久化通讯录。', prompt: '“记住张总的邮箱是 zhang@company.com”' },
+            { id: 'list_email_contacts', type: 'server', typeName: '云端服务插件', category: '邮件通讯', icon: 'fa-address-card', iconColor: 'text-blue-500', name: '查看邮箱通讯录', desc: '查询或朗读当前通讯录中有哪些联系人及邮箱。', prompt: '“查一下我的通讯录” / “张总的邮箱是多少？”' },
+
+            // 🎵 音乐与音频中枢 (2)
+            { id: 'play_music', type: 'server', typeName: '云端服务插件', category: '音乐音频', icon: 'fa-music', iconColor: 'text-emerald-500', name: '高保真音乐播放与流式点歌', desc: '支持本地高品质曲库（孤勇者、晴天等）与全网在线点歌，原生 16kHz Opus 零延迟直推。', prompt: '“播放孤勇者” / “放一首周杰伦的晴天”' },
+            { id: 'hass_play_music', type: 'server', typeName: '云端服务插件', category: '音乐音频', icon: 'fa-compact-disc', iconColor: 'text-sky-500', name: 'HomeAssistant 音响联动', desc: '联动家庭局域网 HomeAssistant 外部智能音箱设备进行音频投送。', prompt: '“在客厅音箱上播放音乐”' },
+
+            // 📝 随身备忘与知识库 (4)
+            { id: 'record_note', type: 'server', typeName: '云端服务插件', category: '备忘知识', icon: 'fa-pen-to-square', iconColor: 'text-amber-500', name: '随身灵感备忘录记录', desc: '记录待办清单、灵感想法、日记随笔，保存至本地数据中心。', prompt: '“帮我记一下下午3点要取快递”' },
+            { id: 'read_notes', type: 'server', typeName: '云端服务插件', category: '备忘知识', icon: 'fa-book-open', iconColor: 'text-amber-600', name: '备忘录查询与朗读', desc: '查看、搜索并朗读之前保存的所有笔记与待办事项。', prompt: '“我之前记了什么笔记？” / “读一下我的待办”' },
+            { id: 'delete_note', type: 'server', typeName: '云端服务插件', category: '备忘知识', icon: 'fa-trash-can', iconColor: 'text-rose-500', name: '删除备忘笔记', desc: '安全删除指定的备忘事项或清空已完成项目。', prompt: '“删除取快递的备忘”' },
+            { id: 'search_from_ragflow', type: 'server', typeName: '云端服务插件', category: '备忘知识', icon: 'fa-brain', iconColor: 'text-violet-500', name: 'RAGFlow 私有知识库问答', desc: '精准检索本地 RAGFlow 向量数据库中的私有文档与专业考点。', prompt: '“查一下初中语文必背古诗文考点”' },
+
+            // ⏰ 服务端定时与闹钟 (5)
+            { id: 'set_alarm_clock', type: 'server', typeName: '云端服务插件', category: '定时提醒', icon: 'fa-clock', iconColor: 'text-indigo-500', name: '云端时刻闹钟与日程', desc: '设定特定时间点触发的语音与铃声提醒。', prompt: '“定个明天早上7点半的闹钟”' },
+            { id: 'set_countdown_timer', type: 'server', typeName: '云端服务插件', category: '定时提醒', icon: 'fa-stopwatch', iconColor: 'text-blue-500', name: '云端精准倒计时', desc: '设定分钟/秒级倒计时任务并在到时后主动提醒。', prompt: '“倒计时5分钟提醒我关火”' },
+            { id: 'list_active_timers', type: 'server', typeName: '云端服务插件', category: '定时提醒', icon: 'fa-list-check', iconColor: 'text-cyan-500', name: '查询活跃定时任务', desc: '查看当前所有正在运行的闹钟与倒计时列表。', prompt: '“查看当前有哪些闹钟和倒计时”' },
+            { id: 'cancel_timer_or_alarm', type: 'server', typeName: '云端服务插件', category: '定时提醒', icon: 'fa-ban', iconColor: 'text-rose-500', name: '取消闹钟与倒计时', desc: '根据关键词或全部取消正在运行的定时任务。', prompt: '“取消7点半的闹钟” / “取消所有倒计时”' },
+            { id: 'test_alarm_sound', type: 'server', typeName: '云端服务插件', category: '定时提醒', icon: 'fa-bell', iconColor: 'text-amber-500', name: '测试闹钟扬声器声音', desc: '试听闹钟提示音效果并校验扬声器通道。', prompt: '“测试一下闹钟声音”' },
+
+            // 🏠 智能家居 HomeAssistant (2)
+            { id: 'hass_get_state', type: 'server', typeName: '云端服务插件', category: '智能家居', icon: 'fa-house-signal', iconColor: 'text-emerald-500', name: '智能家居状态查询', desc: '查询 HomeAssistant 中灯光亮度、开关、空调温度、传感器数值等。', prompt: '“客厅灯开着吗？” / “卧室温度是多少？”' },
+            { id: 'hass_set_state', type: 'server', typeName: '云端服务插件', category: '智能家居', icon: 'fa-toggle-on', iconColor: 'text-emerald-600', name: '智能家居设备控制', desc: '控制智能家居设备开关、调节灯光色温、设置模式等。', prompt: '“把客厅灯打开” / “调暗床头灯”' },
+
+            // 🛠️ 实用生活与系统助手 (5)
+            { id: 'get_weather', type: 'server', typeName: '云端服务插件', category: '生活助手', icon: 'fa-cloud-sun', iconColor: 'text-sky-500', name: '全国实时天气与预报', desc: '根据指定城市/区县获取最新天气、气温、湿度与出行建议。', prompt: '“广州今天天气怎么样？” / “明天会下雨吗？”' },
+            { id: 'get_lunar', type: 'server', typeName: '云端服务插件', category: '生活助手', icon: 'fa-moon', iconColor: 'text-indigo-400', name: '农历黄历与节气宜忌', desc: '查询农历日期、干支生肖、二十四节气与黄历吉凶宜忌。', prompt: '“今天农历几月几号？” / “今天宜忌是什么？”' },
+            { id: 'change_role', type: 'server', typeName: '云端服务插件', category: '系统控制', icon: 'fa-masks-theater', iconColor: 'text-pink-500', name: '动态人设性格切换', desc: '一键切换小智的角色性格（如机车女友、英语老师、好奇男孩）。', prompt: '“切换成机车女友角色”' },
+            { id: 'call_device', type: 'server', typeName: '云端服务插件', category: '系统控制', icon: 'fa-phone-volume', iconColor: 'text-emerald-500', name: '设备双向实时通话', desc: '与其他已在线的小智硬件设备发起双向实时语音连线对讲。', prompt: '“呼叫客厅小智音箱”' },
+            { id: 'handle_exit_intent', type: 'server', typeName: '云端服务插件', category: '系统控制', icon: 'fa-arrow-right-from-bracket', iconColor: 'text-slate-500', name: '会话优雅退出与休眠', desc: '当用户表达再见、退下、好的没事了时，礼貌收尾并进入静默待命。', prompt: '“好的没事了” / “退下吧” / “再见”' },
+
+            // ⚡ 10 个 ESP32 板载硬件 MCP 工具 (10)
+            { id: 'self.alarm.set_alarm', type: 'mcp', typeName: 'ESP32 硬件MCP', category: '板载硬件时钟', icon: 'fa-microchip', iconColor: 'text-amber-500', name: 'ESP32 板载硬件时刻闹钟', desc: '直接在 ESP32 芯片底层 NVS 注册硬件定时器，断网离线状态下亦可准时鸣响。', prompt: '“在板子上定个明早8点的硬件闹钟”' },
+            { id: 'self.alarm.set_countdown', type: 'mcp', typeName: 'ESP32 硬件MCP', category: '板载硬件时钟', icon: 'fa-stopwatch-20', iconColor: 'text-amber-600', name: 'ESP32 板载硬件秒级倒计时', desc: '硬件高精度倒计时，完全独立于云端，断网不影响倒计时响铃。', prompt: '“板载倒计时3分钟”' },
+            { id: 'self.alarm.list_alarms', type: 'mcp', typeName: 'ESP32 硬件MCP', category: '板载硬件时钟', icon: 'fa-list-ol', iconColor: 'text-amber-500', name: '查询芯片存储的硬件闹钟', desc: '读取 ESP32 NVS 闪存中保存的所有硬件闹钟与倒计时。', prompt: '“列出硬件闹钟”' },
+            { id: 'self.alarm.cancel_alarm', type: 'mcp', typeName: 'ESP32 硬件MCP', category: '板载硬件时钟', icon: 'fa-calendar-xmark', iconColor: 'text-rose-500', name: '取消板载硬件闹钟', desc: '注销 ESP32 本地硬件定时器任务。', prompt: '“取消板载闹钟”' },
+            { id: 'self.get_device_status', type: 'mcp', typeName: 'ESP32 硬件MCP', category: '板载传感器与状态', icon: 'fa-gauge-high', iconColor: 'text-indigo-500', name: '读取硬件底层实时工况', desc: '实时感知板载扬声器音量、屏幕背光、电池电量与 WiFi 信号强度。', prompt: '“查询音箱当前硬件状态”' },
+            { id: 'self.audio_speaker.set_volume', type: 'mcp', typeName: 'ESP32 硬件MCP', category: '音频功放控制', icon: 'fa-volume-high', iconColor: 'text-blue-500', name: '板载扬声器音量调节', desc: '精确调节 ESP32 底层 DAC/I2S 功放增益（0 ~ 100 阶）。', prompt: '“把音箱音量调到 80” / “声音调小一点”' },
+            { id: 'self.screen.set_theme', type: 'mcp', typeName: 'ESP32 硬件MCP', category: '屏幕显示控制', icon: 'fa-display', iconColor: 'text-purple-500', name: '板载 LCD 屏幕主题切换', desc: '切换屏幕界面渲染模式（浅色 light / 深色 dark）。', prompt: '“把屏幕调成深色模式”' },
+            { id: 'self.lamp.get_state', type: 'mcp', typeName: 'ESP32 硬件MCP', category: 'GPIO 夜灯外设', icon: 'fa-lightbulb', iconColor: 'text-amber-400', name: '感知板载夜灯通断状态', desc: '读取 GPIO 控制的夜灯当前通电/断电亮灭状态。', prompt: '“小夜灯是开着的吗？”' },
+            { id: 'self.lamp.turn_on', type: 'mcp', typeName: 'ESP32 硬件MCP', category: 'GPIO 夜灯外设', icon: 'fa-sun', iconColor: 'text-amber-500', name: '点亮板载/外接夜灯', desc: '驱动 GPIO 输出高电平点亮板载补光灯或夜灯。', prompt: '“打开小夜灯”' },
+            { id: 'self.lamp.turn_off', type: 'mcp', typeName: 'ESP32 硬件MCP', category: 'GPIO 夜灯外设', icon: 'fa-moon', iconColor: 'text-slate-600', name: '熄灭板载/外接夜灯', desc: '驱动 GPIO 输出低电平关闭夜灯。', prompt: '“关闭小夜灯”' },
+        ];
+
+        let currentToolFilter = 'all';
+        let currentToolSearch = '';
+
+        function openToolsModal() {
+            const modal = document.getElementById('modal-tools-matrix');
+            const container = document.getElementById('modal-tools-container');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            container.classList.remove('scale-95');
+            container.classList.add('scale-100');
+            document.body.style.overflow = 'hidden';
+            renderToolsGrid();
+        }
+
+        function closeToolsModal() {
+            const modal = document.getElementById('modal-tools-matrix');
+            const container = document.getElementById('modal-tools-container');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            container.classList.remove('scale-100');
+            container.classList.add('scale-95');
+            document.body.style.overflow = '';
+        }
+
+        function handleToolsModalBackdrop(event) {
+            if (event.target.id === 'modal-tools-matrix') {
+                closeToolsModal();
+            }
+        }
+
+        // 支持 ESC 键退出
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeToolsModal();
+        });
+
+        function filterTools(type) {
+            currentToolFilter = type;
+            document.querySelectorAll('.tool-filter-btn').forEach(btn => {
+                btn.className = 'tool-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 transition';
+            });
+            const activeBtn = document.getElementById(`tool-filter-${type}`);
+            if (activeBtn) {
+                activeBtn.className = 'tool-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm transition';
+            }
+            renderToolsGrid();
+        }
+
+        function searchTools(kw) {
+            currentToolSearch = kw.trim().toLowerCase();
+            renderToolsGrid();
+        }
+
+        function renderToolsGrid() {
+            const container = document.getElementById('tools-grid-container');
+            const emptyState = document.getElementById('tools-empty-state');
+            
+            const filtered = ALL_TOOLS.filter(tool => {
+                const matchType = currentToolFilter === 'all' || tool.type === currentToolFilter;
+                const matchSearch = !currentToolSearch || 
+                    tool.id.toLowerCase().includes(currentToolSearch) ||
+                    tool.name.toLowerCase().includes(currentToolSearch) ||
+                    tool.desc.toLowerCase().includes(currentToolSearch) ||
+                    tool.category.toLowerCase().includes(currentToolSearch) ||
+                    tool.prompt.toLowerCase().includes(currentToolSearch);
+                return matchType && matchSearch;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            container.innerHTML = filtered.map(t => {
+                const isServer = t.type === 'server';
+                const tagClass = isServer 
+                    ? 'bg-sky-50 text-sky-700 border-sky-200' 
+                    : 'bg-amber-50 text-amber-700 border-amber-200';
+                const cardBorder = isServer
+                    ? 'hover:border-indigo-300 hover:shadow-indigo-50'
+                    : 'hover:border-amber-300 hover:shadow-amber-50';
+
+                return `
+                    <div class="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-sm transition-all duration-200 ${cardBorder} hover:shadow-md flex flex-col justify-between group">
+                        <div>
+                            <div class="flex items-center justify-between mb-2.5">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 rounded-xl bg-slate-100 flex items-center justify-center text-sm ${t.iconColor} group-hover:scale-110 transition-transform">
+                                        <i class="fa-solid ${t.icon}"></i>
+                                    </div>
+                                    <span class="font-mono text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">${t.id}</span>
+                                </div>
+                                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full border ${tagClass}">
+                                    ${t.typeName}
+                                </span>
+                            </div>
+                            
+                            <h4 class="text-xs font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                                <span>${t.name}</span>
+                                <span class="text-[10px] font-normal px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">${t.category}</span>
+                            </h4>
+                            <p class="text-[11px] text-slate-600 leading-relaxed line-clamp-2" title="${t.desc}">
+                                ${t.desc}
+                            </p>
+                        </div>
+
+                        <div class="mt-3 pt-2.5 border-t border-slate-100 text-[10px] text-slate-500 flex items-start gap-1.5 bg-slate-50/70 p-2 rounded-xl">
+                            <i class="fa-solid fa-microphone text-indigo-500 mt-0.5 shrink-0"></i>
+                            <span class="font-medium text-slate-700 truncate" title="${t.prompt}">${t.prompt}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         async function sendQuickTTS() {

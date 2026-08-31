@@ -86,6 +86,8 @@ class SimpleHttpServer:
                         web.post("/api/faces/delete", self.face_handler.handle_delete_face),
                         web.post("/api/faces/recognize", self.face_handler.handle_test_recognize),
                         web.get("/api/faces/s20/status", self.face_handler.handle_s20_status),
+                        web.get("/api/faces/preview", self.face_handler.handle_camera_preview),
+                        web.get("/api/faces/stream", self.face_handler.handle_camera_stream),
                         # 视觉哨兵路由
                         web.get("/api/faces/sentinel", self.face_handler.handle_sentinel_status),
                         web.post("/api/faces/sentinel/toggle", self.face_handler.handle_sentinel_toggle),

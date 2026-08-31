@@ -93,6 +93,19 @@ class FaceSentinel:
             except Exception as e:
                 print(f"{TAG} Failed to load config: {e}")
 
+    def get_status(self):
+        return {
+            "enabled": self.config.get("enabled", True),
+            "status": getattr(self, "status", "monitoring"),
+            "last_check_time": getattr(self, "last_check_time", 0),
+            "config": self.config
+        }
+
+    def update_config(self, new_cfg: dict):
+        self.config.update(new_cfg)
+        self.save_config()
+        return self.get_status()
+
     def save_config(self):
         try:
             os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
