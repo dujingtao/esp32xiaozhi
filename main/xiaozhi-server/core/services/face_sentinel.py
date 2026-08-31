@@ -54,8 +54,8 @@ class FaceSentinel:
             "enabled": True,
             "camera_url": "http://100.122.149.94:8080/shot.jpg",
             "check_interval": 0.5,
-            "absence_threshold_sec": 90,  # 连续 90 秒未见人判定为真正离席
-            "min_reentry_cooldown_sec": 180,  # 离席后重入触发问候的最短间隔 (3分钟)
+            "absence_threshold_sec": 25,      # 连续 25 秒无真人人脸即判定为离席
+            "min_reentry_cooldown_sec": 60,   # 重入问候冷却时间 (1分钟)
             "wechat_notify": True,
             "greet_stranger": True,
             "last_global_greeting_time": 0,
@@ -64,8 +64,7 @@ class FaceSentinel:
         self.load_config()
         self.status = "monitoring"
         
-        # ── 在场状态机 (Presence State Machine) ──
-        # 状态值: "ABSENT" (离席无人) | "PRESENT" (常驻在场静默) | "LEAVING" (疑似离开观察中)
+        # 状态机: "ABSENT" (离席无人/守望中) | "PRESENT" (在场静默伴随) | "LEAVING" (疑似离开过渡中)
         self.presence_state = "ABSENT"
         self.last_seen_time = 0
         self.last_unseen_time = time.time()
@@ -76,13 +75,12 @@ class FaceSentinel:
         
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.worker_thread.start()
-        print(f"{TAG} v2.0.0 Sentinel Started: Presence & Re-entry State Machine Active.")
+        print(f"{TAG} v2.1.0 High-Sensitivity Sentinel Started: Presence State Machine Active.")
 
     def _init_cascades(self):
         paths = [
             "/usr/local/lib/python3.10/site-packages/cv2/data/haarcascade_frontalface_alt2.xml",
             "/usr/local/lib/python3.10/site-packages/cv2/data/haarcascade_profileface.xml",
-            "/app/data/models/haarcascade_frontalface_default.xml"
         ]
         for p in paths:
             if os.path.exists(p):
@@ -143,16 +141,34 @@ class FaceSentinel:
         return None, None
 
     def _detect_faces(self, frame):
+        """精准人脸检测，过滤边缘毛刺与静态背景噪点"""
         if frame is None or not self.cascades:
             return []
         try:
+            H, W, _ = frame.shape
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = []
-            for c in self.cascades:
-                dets = c.detectMultiScale(gray, scaleFactor=1.08, minNeighbors=2, minSize=(40, 40))
-                for f in dets:
-                    if f[2] >= 45 and f[3] >= 45:
-                        faces.append((int(f[0]), int(f[1]), int(f[2]), int(f[3])))
+            
+            # 1. 优先使用正面人脸 alt2 分类器 (minNeighbors=3 避免边角假人脸)
+            c_front = self.cascades[0]
+            dets = c_front.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(60, 60))
+            for f in dets:
+                x, y, w, h = int(f[0]), int(f[1]), int(f[2]), int(f[3])
+                # 过滤极其贴近画面边缘极小死角的干扰噪点
+                if y + h >= H - 5 and (x <= 5 or x + w >= W - 5) and w < 80:
+                    continue
+                faces.append((x, y, w, h))
+
+            # 2. 如果正面未检出且配置了侧脸分类器，采用严格 minNeighbors=4 侧脸检测
+            if not faces and len(self.cascades) > 1:
+                c_prof = self.cascades[1]
+                dets_prof = c_prof.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(60, 60))
+                for f in dets_prof:
+                    x, y, w, h = int(f[0]), int(f[1]), int(f[2]), int(f[3])
+                    if y + h >= H - 5 and (x <= 5 or x + w >= W - 5) and w < 80:
+                        continue
+                    faces.append((x, y, w, h))
+
             return faces
         except Exception as e:
             print(f"{TAG} _detect_faces error: {e}")
@@ -408,7 +424,7 @@ class FaceSentinel:
         return event
 
     def _run_loop(self):
-        """持续在场状态机驱动与视觉迎宾主循环"""
+        """持续在场状态机驱动与高灵敏视觉迎宾主循环"""
         while True:
             time.sleep(self.config.get("check_interval", 0.5))
             if not self.config.get("enabled", True):
@@ -425,8 +441,8 @@ class FaceSentinel:
             faces = self._detect_faces(frame)
             has_face = len(faces) > 0
 
-            absence_threshold = self.config.get("absence_threshold_sec", 90)
-            reentry_cooldown = self.config.get("min_reentry_cooldown_sec", 180)
+            absence_threshold = self.config.get("absence_threshold_sec", 25)
+            reentry_cooldown = self.config.get("min_reentry_cooldown_sec", 60)
 
             # ── 1. 状态变迁处理 ──
             if has_face:
@@ -437,20 +453,18 @@ class FaceSentinel:
                     self.status = "present_silent"
                     continue
                 elif self.presence_state == "LEAVING":
-                    # 短暂离席（<90秒）即重新回到视野，平滑恢复为常驻伴随，不打扰
-                    print(f"{TAG} Short absence resolved within {int(now_ts - self.last_unseen_time)}s. Restoring to PRESENT (silent).")
+                    # 短暂离开（<25秒）即回到视野，平滑恢复为常驻伴随，不打扰
                     self.presence_state = "PRESENT"
                     self.status = "present_silent"
                     continue
 
                 # 只有此前处于 ABSENT（完全无人/离席超时）状态时，才认为是“全新进入/初见事件”
                 elif self.presence_state == "ABSENT":
-                    # 检查重入最短冷却间隔
+                    # 检查重入最短冷却间隔 (例如 60 秒)
                     last_global = self.config.get("last_global_greeting_time", 0)
                     if now_ts - last_global < reentry_cooldown:
-                        print(f"{TAG} Re-entry within cooldown ({int(now_ts - last_global)}s < {reentry_cooldown}s), muting.")
-                        self.presence_state = "PRESENT"
-                        self.status = "present_silent"
+                        # 冷却中保持 ABSENT 等待冷却结束，绝不锁死成 PRESENT！
+                        self.status = "cooldown_waiting"
                         continue
 
                     # ── 发现全新进入目标，进入多帧动态观察窗口 ──
@@ -472,8 +486,8 @@ class FaceSentinel:
                         best_crop = crop
                         best_bytes = img_bytes
 
-                    while time.time() - obs_start < 1.8:
-                        time.sleep(0.35)
+                    while time.time() - obs_start < 1.6:
+                        time.sleep(0.3)
                         f_next, bytes_next = self._grab_camera_frame()
                         if f_next is None:
                             continue
@@ -488,7 +502,7 @@ class FaceSentinel:
                                 best_crop = crop_next
                                 best_bytes = bytes_next
 
-                            if score_next >= 85.0 and 0.75 <= aspect_next <= 1.15:
+                            if score_next >= 80.0 and 0.75 <= aspect_next <= 1.15:
                                 print(f"{TAG} High-confidence clear frontal face captured ({score_next:.1f} pts), fast locking!")
                                 break
 
@@ -498,7 +512,7 @@ class FaceSentinel:
                     is_family = False
                     visual_desc = "在书桌前停步"
 
-                    if best_score >= 45.0 and best_bytes:
+                    if best_score >= 40.0 and best_bytes:
                         person_name, is_family, visual_desc = self._recognize_person_vlm(best_bytes)
                         print(f"{TAG} VLM Result: name='{person_name}', is_family={is_family}, visual_desc='{visual_desc}'")
                         if person_name == "无人":
@@ -509,7 +523,7 @@ class FaceSentinel:
 
                     if is_family:
                         quality_status = "clear_family"
-                    elif best_score >= 45.0 and 0.70 <= best_aspect <= 1.25:
+                    elif best_score >= 40.0 and 0.70 <= best_aspect <= 1.25:
                         quality_status = "clear_stranger"
                     elif best_aspect < 0.70 or best_aspect > 1.25:
                         quality_status = "angled_unclear"
@@ -534,7 +548,7 @@ class FaceSentinel:
                     self.status = "leaving_monitoring"
                     print(f"{TAG} Person not seen. Entering LEAVING state (will confirm ABSENT after {absence_threshold}s)...")
                 elif self.presence_state == "LEAVING":
-                    # 持续无人，检查是否超时（超过 90 秒判定为真正离席）
+                    # 持续无人，检查是否超时（超过 25 秒判定为真正离席）
                     if now_ts - self.last_unseen_time >= absence_threshold:
                         self.presence_state = "ABSENT"
                         self.status = "monitoring"
