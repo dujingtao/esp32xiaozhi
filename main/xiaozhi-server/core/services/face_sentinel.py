@@ -90,7 +90,7 @@ class FaceSentinel:
         
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.worker_thread.start()
-        print(f"{TAG} v2.4.0 Sentinel Started: ONNX Deep Learning Detector & Call Perception Active.")
+        print(f"{TAG} v2.4.1 Sentinel Started: Precision VLM Parser & ONNX Deep Learning Active.")
 
     def set_post_exit_cooldown(self, seconds=300):
         """用户主动告别/退出/打电话后，进入 5 分钟静默保护期，绝不主动打扰"""
@@ -107,7 +107,7 @@ class FaceSentinel:
                     YUNET_PATH,
                     "",
                     self.dnn_target_size,
-                    score_threshold=0.65,
+                    score_threshold=0.60,
                     nms_threshold=0.3,
                     top_k=5000
                 )
@@ -202,12 +202,12 @@ class FaceSentinel:
                 if faces is not None:
                     for f in faces:
                         score = float(f[-1])
-                        if score >= 0.60:
+                        if score >= 0.55:
                             x = int(f[0] * scale_x)
                             y = int(f[1] * scale_y)
                             w = int(f[2] * scale_x)
                             h = int(f[3] * scale_y)
-                            if w >= 40 and h >= 40:
+                            if w >= 35 and h >= 35:
                                 detected.append((x, y, w, h))
                 return detected
             except Exception as e:
@@ -296,12 +296,12 @@ class FaceSentinel:
 
             if ref_b64:
                 prompt = f"""请对比图 1（家庭主人【{primary_owner}】标准档案照片）与图 2（摄像头抓拍画面）：
-1. 观察图 2 中人物动作与姿态（特别注意：是否手持手机在耳边接打电话、是否戴着耳机通话中、是否正在看手机），用简短一句话描述；
-2. 判定结果输出规则：
-   - 若画面中人物手持手机在耳边打电话或明显正在语音通话，最后一行必须输出：【认定结果：正在打电话】；
-   - 若根本没有人脸或只是静物被褥，输出：【认定结果：无人】；
-   - 若特征与图1吻合且未在打电话，输出：【认定结果：{primary_owner}】；
-   - 若是陌生面孔且未在打电话，输出：【认定结果：访客朋友】。
+1. 观察图 2 中人物动作与姿态（如：在电脑前打字、手托下巴休息、手持手机贴耳通话等），用简短一句话描述；
+2. 判定输出规则（最后一行严格按格式输出）：
+   - 若人物正在手持手机在耳边接打电话，最后一行输出：【认定结果：正在打电话】；
+   - 若根本无人脸或只是静物，输出：【认定结果：无人】；
+   - 若面貌特征与图1吻合且未在接打电话，输出：【认定结果：{primary_owner}】；
+   - 若是陌生面孔且未在接打电话，输出：【认定结果：访客朋友】。
 """
                 content_payload = [
                     {"type": "text", "text": prompt},
@@ -331,19 +331,29 @@ class FaceSentinel:
                 content = result_json["choices"][0]["message"]["content"].strip()
                 print(f"{TAG} VLM Raw Output: {content}")
                 
-                raw_desc = content.split("【认定结果")[0].strip() if "【认定结果" in content else "正在摄像头面前"
-                visual_desc = re.sub(r"^\d+[\.\、\s]*", "", raw_desc).strip()
-                visual_desc = re.sub(r"\n+\d+[\.\、\s]*$", "", visual_desc).strip()
+                # 严格提取【认定结果：xxx】结论行，绝不松散误判正文中的“没有在打电话”
+                conclusion_match = re.search(r"【认定结果[：:]\s*(.*?)】", content)
+                conclusion = conclusion_match.group(1).strip() if conclusion_match else ""
+                
+                # 提取视觉观察描述
+                raw_desc = content.split("【认定结果")[0].strip() if "【认定结果" in content else content
+                lines = [l.strip() for l in raw_desc.split("\n") if l.strip() and not l.strip().startswith("根据") and not l.strip().startswith("判定") and not l.strip().startswith("规则")]
+                visual_desc = lines[0] if lines else "在书桌前"
+                visual_desc = re.sub(r"^\d+[\.\、\s]*", "", visual_desc).strip()
                 if not visual_desc:
-                    visual_desc = "在书桌前停步"
+                    visual_desc = "在书桌前"
 
-                if "【认定结果：正在打电话】" in content or "正在打电话" in visual_desc or "耳边打电话" in visual_desc:
+                if conclusion == "正在打电话":
                     return "正在打电话", True, "正在手持电话通话中"
-                elif "【认定结果：无人】" in content or ("无人" in content and primary_owner not in content):
+                elif conclusion == "无人" or ("无人" in conclusion and primary_owner not in conclusion):
                     return "无人", False, "静物/无人"
-                elif f"【认定结果：{primary_owner}】" in content or primary_owner in content:
+                elif primary_owner in conclusion or conclusion == primary_owner:
                     return primary_owner, True, visual_desc
+                elif conclusion == "访客朋友":
+                    return "访客朋友", False, visual_desc
                 else:
+                    if primary_owner in content and "访客" not in content and "无人" not in content and "【认定结果：正在打电话】" not in content:
+                        return primary_owner, True, visual_desc
                     return "访客朋友", False, visual_desc
         except Exception as e:
             print(f"{TAG} VLM face recognize exception: {e}")
