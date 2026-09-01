@@ -17,6 +17,9 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.
 CONFIG_PATH = os.path.join(DATA_DIR, "sentinel_config.json")
 FAMILY_FACES_PATH = os.path.join(DATA_DIR, "family_faces.json")
 FACES_DIR = os.path.join(DATA_DIR, "faces")
+MODELS_DIR = os.path.join(DATA_DIR, "models")
+YUNET_PATH = os.path.join(MODELS_DIR, "face_detection_yunet_2023mar.onnx")
+
 PUSHPLUS_TOKEN = "35c9b21d51cf40978f0e450c4755c73b"
 ZHIPU_API_KEY = "fd04fb160360497291b1ae87596dbde9.ID3C9TfZTgTd3W9h"
 
@@ -54,6 +57,7 @@ class FaceSentinel:
             "enabled": True,
             "camera_url": "http://100.122.149.94:8080/shot.jpg",
             "check_interval": 0.5,
+            "detector_type": "deep_learning_onnx",
             "absence_threshold_sec": 45,      # 连续 45 秒未检测到正面即进入离席准备
             "min_reentry_cooldown_sec": 30,   # 触发后 30 秒内静默
             "reengage_timeout_sec": 7200,     # 同一人 2 小时内重看镜头仅轻咳应答，不长篇大论
@@ -78,12 +82,15 @@ class FaceSentinel:
         self.last_greeted_person = None
         self.last_full_greeting_time = 0
         
+        # 初始化检测器 (ONNX 深度学习 + Haar 级联双引擎)
+        self.dnn_detector = None
+        self.dnn_target_size = (640, 360)
         self.cascades = []
-        self._init_cascades()
+        self._init_detectors()
         
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.worker_thread.start()
-        print(f"{TAG} v2.3.0 Sentinel Started: Call Perception & Goodbye DND Protection Active.")
+        print(f"{TAG} v2.4.0 Sentinel Started: ONNX Deep Learning Detector & Call Perception Active.")
 
     def set_post_exit_cooldown(self, seconds=300):
         """用户主动告别/退出/打电话后，进入 5 分钟静默保护期，绝不主动打扰"""
@@ -92,7 +99,23 @@ class FaceSentinel:
         self.status = "post_exit_silent"
         print(f"{TAG} Post-exit DND activated for {seconds}s (until {datetime.fromtimestamp(self.post_exit_mute_until).strftime('%H:%M:%S')})")
 
-    def _init_cascades(self):
+    def _init_detectors(self):
+        # 1. 深度学习 ONNX 人脸检测引擎 (YuNet)
+        if os.path.exists(YUNET_PATH) and hasattr(cv2, "FaceDetectorYN"):
+            try:
+                self.dnn_detector = cv2.FaceDetectorYN.create(
+                    YUNET_PATH,
+                    "",
+                    self.dnn_target_size,
+                    score_threshold=0.65,
+                    nms_threshold=0.3,
+                    top_k=5000
+                )
+                print(f"{TAG} [DeepLearning] Initialized ONNX YuNet Face Detector from {YUNET_PATH}")
+            except Exception as e:
+                print(f"{TAG} [DeepLearning] YuNet load error: {e}")
+
+        # 2. Haar 级联后备引擎
         paths = [
             "/usr/local/lib/python3.10/site-packages/cv2/data/haarcascade_frontalface_alt2.xml",
             "/usr/local/lib/python3.10/site-packages/cv2/data/haarcascade_profileface.xml",
@@ -102,9 +125,8 @@ class FaceSentinel:
                 try:
                     c = cv2.CascadeClassifier(p)
                     self.cascades.append(c)
-                    print(f"{TAG} Loaded Cascade from {p}")
-                except Exception as e:
-                    print(f"{TAG} Cascade load error for {p}: {e}")
+                except Exception:
+                    pass
 
     def load_config(self):
         if os.path.exists(CONFIG_PATH):
@@ -123,6 +145,7 @@ class FaceSentinel:
             "enabled": self.config.get("enabled", True),
             "status": getattr(self, "status", "monitoring"),
             "presence_state": getattr(self, "presence_state", "ABSENT"),
+            "detector_engine": "ONNX_DeepLearning_YuNet" if self.dnn_detector else "Haar_Cascade",
             "dnd_remaining_seconds": dnd_remaining,
             "last_greeted_person": getattr(self, "last_greeted_person", None),
             "absence_seconds": absence_sec,
@@ -159,34 +182,49 @@ class FaceSentinel:
         return None, None
 
     def _detect_faces(self, frame):
-        """精准人脸检测，过滤边缘毛刺与静态背景噪点"""
-        if frame is None or not self.cascades:
+        """深度学习 ONNX 人脸检测（YuNet 高速推理与高召回率）"""
+        if frame is None:
             return []
+        H, W, _ = frame.shape
+
+        # ── 1. 首选 ONNX 深度学习引擎 ──
+        if self.dnn_detector is not None:
+            try:
+                target_w = 640
+                target_h = int(640 * H / W)
+                resized = cv2.resize(frame, (target_w, target_h))
+                scale_x, scale_y = W / target_w, H / target_h
+                
+                self.dnn_detector.setInputSize((target_w, target_h))
+                _, faces = self.dnn_detector.detect(resized)
+                
+                detected = []
+                if faces is not None:
+                    for f in faces:
+                        score = float(f[-1])
+                        if score >= 0.60:
+                            x = int(f[0] * scale_x)
+                            y = int(f[1] * scale_y)
+                            w = int(f[2] * scale_x)
+                            h = int(f[3] * scale_y)
+                            if w >= 40 and h >= 40:
+                                detected.append((x, y, w, h))
+                return detected
+            except Exception as e:
+                print(f"{TAG} ONNX detect error: {e}")
+
+        # ── 2. 备用 Haar 级联检测 ──
         try:
-            H, W, _ = frame.shape
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = []
-            
-            c_front = self.cascades[0]
-            dets = c_front.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(60, 60))
-            for f in dets:
-                x, y, w, h = int(f[0]), int(f[1]), int(f[2]), int(f[3])
-                if y + h >= H - 5 and (x <= 5 or x + w >= W - 5) and w < 80:
-                    continue
-                faces.append((x, y, w, h))
-
-            if not faces and len(self.cascades) > 1:
-                c_prof = self.cascades[1]
-                dets_prof = c_prof.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(60, 60))
-                for f in dets_prof:
-                    x, y, w, h = int(f[0]), int(f[1]), int(f[2]), int(f[3])
-                    if y + h >= H - 5 and (x <= 5 or x + w >= W - 5) and w < 80:
-                        continue
-                    faces.append((x, y, w, h))
-
+            if self.cascades:
+                c_front = self.cascades[0]
+                dets = c_front.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(60, 60))
+                for f in dets:
+                    faces.append((int(f[0]), int(f[1]), int(f[2]), int(f[3])))
             return faces
         except Exception as e:
-            print(f"{TAG} _detect_faces error: {e}")
+            print(f"{TAG} Cascade fallback error: {e}")
             return []
 
     def _evaluate_face_quality(self, frame, face_box):
@@ -488,7 +526,6 @@ class FaceSentinel:
                     self.status = "present_silent"
                     continue
                 elif self.presence_state == "ON_CALL":
-                    # 通话中保持静默
                     self.status = "on_call_silent"
                     continue
                 elif self.presence_state == "LEAVING":
@@ -505,7 +542,7 @@ class FaceSentinel:
                         continue
 
                     # ── 发现目标，进入多帧动态观察窗口 ──
-                    print(f"{TAG} [Target Spotted] Starting multi-frame observation window from ABSENT state...")
+                    print(f"{TAG} [Target Spotted] Starting multi-frame observation window with ONNX detector...")
                     ConnectionRegistry.broadcast_display_message("正在识别中...")
 
                     candidate_frames = []
