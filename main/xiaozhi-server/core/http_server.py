@@ -1,4 +1,4 @@
-import os
+﻿import os
 import asyncio
 from aiohttp import web
 from config.logger import setup_logging
@@ -7,7 +7,9 @@ from core.api.vision_handler import VisionHandler
 from core.api.face_handler import FaceWebHandler
 from core.api.music_handler import MusicWebHandler
 from core.api.email_handler import EmailWebHandler
+from core.api.fall_handler import FallHandler
 from core.services.face_sentinel import FaceSentinel
+from core.services.fall_detector import FallDetector
 
 TAG = __name__
 
@@ -21,7 +23,9 @@ class SimpleHttpServer:
         self.face_handler = FaceWebHandler(config)
         self.music_handler = MusicWebHandler(config)
         self.email_handler = EmailWebHandler(config)
+        self.fall_handler = FallHandler()
         self.sentinel = FaceSentinel()
+        self.fall_detector = FallDetector()
 
     async def handle_console_page(self, request):
         html_path = os.path.join(os.path.dirname(__file__), "api", "console_admin.html")
@@ -93,6 +97,12 @@ class SimpleHttpServer:
                         web.post("/api/faces/sentinel/toggle", self.face_handler.handle_sentinel_toggle),
                         web.post("/api/faces/sentinel/config", self.face_handler.handle_sentinel_config),
                         web.post("/api/faces/sentinel/trigger_test", self.face_handler.handle_sentinel_trigger_test),
+                        # 🚨 老人健康与跌倒危险看护路由
+                        web.get("/api/fall/status", self.fall_handler.handle_fall_status),
+                        web.post("/api/fall/toggle", self.fall_handler.handle_fall_toggle),
+                        web.post("/api/fall/config", self.fall_handler.handle_fall_config),
+                        web.get("/api/fall/events", self.fall_handler.handle_fall_events),
+                        web.post("/api/fall/test", self.fall_handler.handle_fall_test),
                         # 🎵 本地音乐中枢与曲库管理后台
                         web.get("/music", self.music_handler.handle_page),
                         web.get("/music/", self.music_handler.handle_page),
