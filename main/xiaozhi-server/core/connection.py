@@ -1101,8 +1101,11 @@ class ConnectionHandler:
             # ── 🌙 系统级入眠与清晨起床快速硬拦截器 (Fast Sleep/Wake Interceptor) ──
             if depth == 0:
                 user_text = query.get("content", "") if isinstance(query, dict) else str(query)
-                sleep_keywords = ["睡觉", "休息了", "我要睡", "去睡", "晚安", "别吵我", "不要吵我", "准备睡", "在睡觉", "退下吧", "退下休息"]
-                if any(kw in user_text for kw in sleep_keywords) and not any(neg in user_text for neg in ["不睡", "没睡", "怎么睡", "别睡"]):
+                sleep_keywords = ["睡觉", "休息", "我要睡", "去睡", "晚安", "别吵我", "不要吵我", "准备睡", "在睡觉", "退下吧", "退下休息", "不聊了", "先睡了", "去休息"]
+                neg_keywords = ["不睡", "没睡", "怎么睡", "别睡", "不休息", "没休息", "不睡觉"]
+                if any(kw in user_text for kw in sleep_keywords) and not any(neg in user_text for neg in neg_keywords):
+                    # 对话结束后立即断开连接，防止后续保持监听或触发120秒超时依依不舍提示语
+                    self.close_after_chat = True
                     try:
                         from core.services.face_sentinel import FaceSentinel
                         FaceSentinel().enter_sleep_mode(hours=8.0, reason=f"语音指令识别到休息意图: {user_text}")

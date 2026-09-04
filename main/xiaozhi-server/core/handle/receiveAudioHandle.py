@@ -167,6 +167,17 @@ async def no_voice_close_connect(conn: "ConnectionHandler", have_voice):
             not conn.close_after_chat
             and no_voice_time > 1000 * close_connection_no_voice_time
         ):
+            # 🌙 若当前处于入眠模式，静默关闭连接，绝对严禁发起任何超时告别/依依不舍提示语！
+            try:
+                from core.services.face_sentinel import FaceSentinel
+                if getattr(FaceSentinel(), "is_sleep_mode", False):
+                    conn.logger.bind(tag=TAG).info("处于入眠免打扰模式，超时静默关闭连接，绝不播报依依不舍提示语")
+                    conn.close_after_chat = True
+                    await conn.close()
+                    return
+            except Exception:
+                pass
+
             conn.goodbye_triggered = True
             conn.close_after_chat = True
             conn.last_activity_time = time.time() * 1000
