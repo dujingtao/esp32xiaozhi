@@ -105,9 +105,9 @@
         <!-- TAB 1: 视觉与人脸档案中枢                               -->
         <!-- ======================================================== -->
         <section id="pane-faces" class="tab-pane active space-y-6">
-            <!-- 视觉概览卡片 -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- 实时取景与多摄像头监控窗口 -->
+            <!-- 视觉监控与AI看护中枢 (第1排: 摄像头 + 哨兵/跌倒并列双卡) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 卡片 1: 实时取景与多摄像头监控窗口 -->
                 <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
                     <div>
                         <div class="flex items-center justify-between mb-3">
@@ -116,145 +116,118 @@
                                 实时监控取景
                             </h2>
                             <div class="flex items-center gap-2">
-                                <select id="cam-selector" onchange="switchActiveCamera()" class="text-xs bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                <select id="cam-selector" onchange="switchActiveCamera()" class="text-xs bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
+                                    <option value="s20" selected>📱 三星 S20 手机 (100.122.149.94)</option>
                                     <option value="esp32s3">📷 ESP32-S3-CAM (192.168.1.13)</option>
-                                    <option value="s20">📱 三星 S20 手机 (100.122.149.94)</option>
-                                摄像头实时预览
-                            </h2>
-                            <span id="cam-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">连接中...</span>
+                                </select>
+                                <span id="camera-status-pill" class="px-2.5 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
+                                    在线
+                                </span>
+                            </div>
                         </div>
-                        <div class="relative w-full aspect-video rounded-xl bg-slate-900 overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center group">
-                            <img id="camera-live-feed" src="/api/faces/preview" class="w-full h-full object-cover" onerror="handlePreviewError()">
-                            <div id="cam-overlay-loading" class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center gap-2 text-white text-xs">
+                        <div class="relative bg-slate-900 rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-slate-800 shadow-inner group">
+                            <img id="camera-live-feed" src="/api/faces/preview?source=s20" alt="Live Camera" class="w-full h-full object-cover" onerror="handlePreviewError()">
+                            <div id="cam-overlay-loading" class="hidden absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center gap-2 text-white text-xs">
                                 <i class="fa-solid fa-spinner fa-spin text-xl text-indigo-400"></i>
                                 <span>正在连接摄像头...</span>
                             </div>
                             <div id="cam-badge" class="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] text-white flex items-center gap-1">
                                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                ESP32-S3 OV5640 (25FPS)
+                                三星 S20 1080P 高清主摄
                             </div>
                         </div>
                     </div>
                     <div class="mt-4 flex flex-col gap-2">
                         <div class="flex gap-2">
-                            <button onclick="refreshCameraPreview()" class="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5">
-                                <i class="fa-solid fa-arrows-rotate"></i> 刷新
+                            <button onclick="refreshCameraPreview()" class="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                <i class="fa-solid fa-arrows-rotate"></i> 刷新单帧
                             </button>
-                            <button onclick="toggleStreamMode()" id="btn-stream-toggle" class="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5">
-                                <i class="fa-solid fa-play"></i> 实时流
+                            <button onclick="toggleStreamMode()" id="btn-stream-toggle" class="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                <i class="fa-solid fa-play"></i> 实时视频流
                             </button>
-                            <button onclick="testCameraVLM()" class="flex-1 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold transition flex items-center justify-center gap-1.5 border border-indigo-200">
+                            <button onclick="testCameraVLM()" class="flex-1 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold transition flex items-center justify-center gap-1.5 border border-indigo-200 cursor-pointer">
                                 <i class="fa-solid fa-wand-magic-sparkles"></i> 拍摄分析
                             </button>
                         </div>
                         <div id="esp32-controls" class="flex gap-2 pt-1 border-t border-slate-100">
-                            <button onclick="toggleLed(1)" class="flex-1 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold transition flex items-center justify-center gap-1 border border-amber-200">
+                            <button onclick="toggleLed(1)" class="flex-1 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold transition flex items-center justify-center gap-1 border border-amber-200 cursor-pointer">
                                 💡 开启补光灯
                             </button>
-                            <button onclick="toggleLed(0)" class="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition flex items-center justify-center gap-1">
+                            <button onclick="toggleLed(0)" class="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition flex items-center justify-center gap-1 cursor-pointer">
                                 🌑 关闭补光灯
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- 视觉哨兵智能配置卡片 -->
-                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                    <div>
-                        <div class="flex items-center justify-between mb-4">
-                            <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <!-- 卡片 2: AI 智能看护双中枢 (视觉哨兵 + 跌倒看护 并列组合) -->
+                <div class="space-y-4 flex flex-col justify-between">
+                    <!-- 2.1 智能视觉哨兵 -->
+                    <div class="glass-card rounded-2xl p-4 border border-slate-200/80 shadow-sm">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-bold text-slate-900 flex items-center gap-2">
                                 <i class="fa-solid fa-shield-halved text-indigo-600"></i>
                                 智能视觉哨兵 (FaceSentinel)
                             </h2>
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" id="sentinel-switch" class="sr-only peer" onchange="toggleSentinel()">
-                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
                             </label>
                         </div>
-                        <p class="text-xs text-slate-500 leading-relaxed">
-                            当摄像头捕捉到家庭成员时，自动触发礼貌问候；无人在场时自动过滤静物与被褥褶皱。
-                        </p>
-
-                        <div class="mt-4 space-y-3.5">
-                            <div>
-                                <div class="flex justify-between text-xs font-medium text-slate-700 mb-1">
-                                    <span>防打扰冷却周期</span>
-                                    <span id="label-cooldown" class="font-bold text-indigo-600">20 分钟</span>
-                                </div>
-                                <input type="range" id="input-cooldown" min="5" max="60" step="5" value="20" oninput="document.getElementById('label-cooldown').innerText = this.value + ' 分钟'" onchange="saveSentinelConfig()" class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
-                            </div>
-
-                            <div class="flex items-center justify-between pt-2 border-t border-slate-100">
-                                <span class="text-xs text-slate-600">微信 PushPlus 主动通知</span>
-                                <input type="checkbox" id="check-wechat" onchange="saveSentinelConfig()" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
-                            </div>
-
+                        <div class="space-y-2.5">
                             <div class="flex items-center justify-between p-2.5 rounded-xl bg-purple-50/80 border border-purple-200/80 text-xs">
-                                <div class="flex items-center gap-1.5">
-                                    <i class="fa-solid fa-moon text-purple-600 text-sm"></i>
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-moon text-purple-600 text-base"></i>
                                     <div>
-                                        <div class="font-bold text-purple-900">入眠静默免打扰</div>
+                                        <div class="font-bold text-purple-900 text-[11px]">入眠静默免打扰 (SLEEP_MODE)</div>
                                         <div id="sentinel-sleep-desc" class="text-[10px] text-purple-600">日常守望中</div>
                                     </div>
                                 </div>
                                 <button id="btn-toggle-sleep" onclick="toggleSentinelSleep()" class="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-semibold transition cursor-pointer">开启入眠</button>
                             </div>
-
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs text-slate-600">空房间/静物自动过滤</span>
-                                <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-50 text-emerald-600 border border-emerald-200">已启用 (v2.6)</span>
+                            <div class="flex justify-between items-center text-xs text-slate-600">
+                                <span>防打扰冷却: <strong id="label-cooldown" class="text-indigo-600 font-bold">20 分钟</strong></span>
+                                <input type="range" id="input-cooldown" min="5" max="60" step="5" value="20" oninput="document.getElementById('label-cooldown').innerText = this.value + ' 分钟'" onchange="saveSentinelConfig()" class="w-32 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                            </div>
+                            <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                                <span class="text-slate-600 flex items-center gap-1">微信通知: <input type="checkbox" id="check-wechat" onchange="saveSentinelConfig()" class="rounded text-indigo-600 focus:ring-indigo-500"></span>
+                                <button onclick="triggerSentinelTest()" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold transition cursor-pointer">模拟问候</button>
                             </div>
                         </div>
                     </div>
 
-                    <button onclick="triggerSentinelTest()" class="mt-4 w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-play"></i> 模拟触发一次问候
-                    </button>
-                </div>
-
-                <!-- 🚨 老人健康与跌倒安全看护卡片 (Elderly Fall Guardian) -->
-                <div class="glass-card rounded-2xl p-5 border border-rose-200/80 shadow-sm flex flex-col justify-between bg-gradient-to-br from-white via-rose-50/20 to-white">
-                    <div>
-                        <div class="flex items-center justify-between mb-3">
-                            <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <!-- 2.2 老人跌倒看护 -->
+                    <div class="glass-card rounded-2xl p-4 border border-rose-200/80 shadow-sm bg-gradient-to-br from-white via-rose-50/20 to-white">
+                        <div class="flex items-center justify-between mb-2">
+                            <h2 class="text-xs font-bold text-slate-900 flex items-center gap-2">
                                 <i class="fa-solid fa-person-falling-burst text-rose-600"></i>
                                 老人跌倒安全看护 (Fall Guardian)
                             </h2>
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" id="fall-switch" class="sr-only peer" onchange="toggleFallDetector()">
-                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+                                <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600"></div>
                             </label>
                         </div>
-                        <p class="text-xs text-slate-500 leading-relaxed">
-                            深度学习姿态关键点提取 + 动力学倒地不起确认 + 大模型语义复核，自动触发音箱大声问候与微信穿透求助。
-                        </p>
-
-                        <div class="mt-4 space-y-3">
-                            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
-                                <span class="text-slate-500">实时姿态状态:</span>
+                        <div class="space-y-2.5">
+                            <div class="p-2 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
+                                <span class="text-slate-500">实时姿态:</span>
                                 <span id="fall-posture-badge" class="font-bold px-2 py-0.5 rounded-full text-[11px] bg-slate-100 text-slate-700">检测中...</span>
                             </div>
-
-                            <div>
-                                <div class="flex justify-between text-xs font-medium text-slate-700 mb-1">
-                                    <span>倒地滞留确认门限</span>
-                                    <span id="label-dwell" class="font-bold text-rose-600">8 秒</span>
-                                </div>
-                                <input type="range" id="input-dwell" min="5" max="20" step="1" value="8" oninput="document.getElementById('label-dwell').innerText = this.value + ' 秒'" onchange="saveFallConfig()" class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-600">
+                            <div class="flex justify-between items-center text-xs text-slate-600">
+                                <span>卧倒门限: <strong id="label-dwell" class="text-rose-600 font-bold">8 秒</strong></span>
+                                <input type="range" id="input-dwell" min="5" max="20" step="1" value="8" oninput="document.getElementById('label-dwell').innerText = this.value + ' 秒'" onchange="saveFallConfig()" class="w-32 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-600">
                             </div>
-
-                            <div class="flex items-center justify-between pt-1 border-t border-slate-100">
-                                <span class="text-xs text-slate-600">VLM 大模型二次复核</span>
-                                <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-50 text-emerald-600 border border-emerald-200">已开启 (防误报)</span>
+                            <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                                <span class="text-[11px] text-emerald-600 font-semibold"><i class="fa-solid fa-check-double mr-1"></i>VLM大模型复核已启用</span>
+                                <button onclick="triggerFallTest()" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-semibold transition cursor-pointer">跌倒演练</button>
                             </div>
                         </div>
                     </div>
-
-                    <button onclick="triggerFallTest()" class="mt-4 w-full py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer">
-                        <i class="fa-solid fa-triangle-exclamation"></i> 演练：模拟跌倒紧急响应与问询
-                    </button>
                 </div>
+            </div>
 
+            <!-- 第2排: 快速录入人脸档案 (1列) + 已登记家庭成员档案库 (2列) -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- 快速添加人脸档案卡片 -->
                 <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
                     <div>
@@ -279,25 +252,25 @@
                                 <label class="block text-xs font-medium text-slate-700 mb-1">人脸照片 (正脸清晰照)</label>
                                 <input type="file" id="reg-face-file" accept="image/*" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
                             </div>
-                            <button type="submit" class="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition shadow-md shadow-indigo-100 flex items-center justify-center gap-1.5">
+                            <button type="submit" class="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition shadow-md shadow-indigo-100 flex items-center justify-center gap-1.5 cursor-pointer">
                                 <i class="fa-solid fa-cloud-arrow-up"></i> 确认录入档案
                             </button>
                         </form>
                     </div>
                 </div>
-            </div>
 
-            <!-- 已登记家庭成员档案列表 -->
-            <div class="glass-card rounded-2xl p-6 border border-slate-200/80 shadow-sm">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <i class="fa-solid fa-users text-indigo-600"></i>
-                        已登记家庭成员档案库
-                    </h2>
-                    <span id="badge-faces-count" class="text-xs text-slate-500">共 0 位成员</span>
-                </div>
-                <div id="faces-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    <!-- Dynamic Faces Cards -->
+                <!-- 已登记家庭成员档案列表 (占 2 份宽度) -->
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm lg:col-span-2">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-users text-indigo-600"></i>
+                            已登记家庭成员档案库
+                        </h2>
+                        <span id="badge-faces-count" class="text-xs text-slate-500 font-semibold">共 0 位成员</span>
+                    </div>
+                    <div id="faces-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        <!-- Dynamic Faces Cards -->
+                    </div>
                 </div>
             </div>
         </section>
