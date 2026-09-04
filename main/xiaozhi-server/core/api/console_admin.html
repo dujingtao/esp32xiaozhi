@@ -189,6 +189,17 @@
                                 <input type="checkbox" id="check-wechat" onchange="saveSentinelConfig()" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500">
                             </div>
 
+                            <div class="flex items-center justify-between p-2.5 rounded-xl bg-purple-50/80 border border-purple-200/80 text-xs">
+                                <div class="flex items-center gap-1.5">
+                                    <i class="fa-solid fa-moon text-purple-600 text-sm"></i>
+                                    <div>
+                                        <div class="font-bold text-purple-900">入眠静默免打扰</div>
+                                        <div id="sentinel-sleep-desc" class="text-[10px] text-purple-600">日常守望中</div>
+                                    </div>
+                                </div>
+                                <button id="btn-toggle-sleep" onclick="toggleSentinelSleep()" class="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-semibold transition cursor-pointer">开启入眠</button>
+                            </div>
+
                             <div class="flex items-center justify-between">
                                 <span class="text-xs text-slate-600">空房间/静物自动过滤</span>
                                 <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-50 text-emerald-600 border border-emerald-200">已启用 (v2.6)</span>
@@ -717,12 +728,28 @@
             try {
                 const res = await fetch('/api/faces/sentinel');
                 const data = await res.json();
-                if (data.code === 0 && data.data) {
                     const cfg = data.data.config || {};
                     document.getElementById('sentinel-switch').checked = cfg.enabled !== false;
                     document.getElementById('input-cooldown').value = cfg.cooldown_minutes || 20;
                     document.getElementById('label-cooldown').innerText = (cfg.cooldown_minutes || 20) + ' 分钟';
                     document.getElementById('check-wechat').checked = cfg.wechat_notify !== false;
+
+                    const isSleep = data.data.is_sleep_mode;
+                    const remSec = data.data.sleep_mode_remaining_seconds || 0;
+                    const sleepDesc = document.getElementById('sentinel-sleep-desc');
+                    const sleepBtn = document.getElementById('btn-toggle-sleep');
+                    if (sleepDesc && sleepBtn) {
+                        if (isSleep) {
+                            const remHours = (remSec / 3600).toFixed(1);
+                            sleepDesc.innerText = `已锁定静默 (还剩约 ${remHours} 小时)`;
+                            sleepBtn.innerText = '解除入眠';
+                            sleepBtn.className = 'px-2.5 py-1 rounded-lg bg-slate-600 hover:bg-slate-700 text-white text-[11px] font-semibold transition cursor-pointer';
+                        } else {
+                            sleepDesc.innerText = '日常守望中';
+                            sleepBtn.innerText = '开启入眠';
+                            sleepBtn.className = 'px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-semibold transition cursor-pointer';
+                        }
+                    }
                 }
             } catch (e) {}
 
@@ -851,6 +878,20 @@
             });
             const d = await res.json();
             Swal.fire('已触发', d.msg, 'success');
+        }
+
+        async function toggleSentinelSleep() {
+            const btn = document.getElementById('btn-toggle-sleep');
+            const action = btn.innerText.includes('解除') ? 'exit' : 'enter';
+            Swal.fire({ title: '正在切换免打扰模式...', didOpen: () => Swal.showLoading() });
+            const res = await fetch('/api/faces/sentinel/sleep', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action, hours: 8})
+            });
+            const d = await res.json();
+            Swal.fire(action === 'enter' ? '已进入入眠模式' : '已恢复日常模式', d.msg, 'success');
+            loadFacesData();
         }
 
         // ── 跌倒与看护逻辑 ──

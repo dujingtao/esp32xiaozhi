@@ -1098,6 +1098,26 @@ class ConnectionHandler:
         if query is not None:
             self.logger.bind(tag=TAG).info(f"大模型收到用户消息: {query}")
 
+            # ── 🌙 系统级入眠与清晨起床快速硬拦截器 (Fast Sleep/Wake Interceptor) ──
+            if depth == 0:
+                user_text = query.get("content", "") if isinstance(query, dict) else str(query)
+                sleep_keywords = ["睡觉", "休息了", "我要睡", "去睡", "晚安", "别吵我", "不要吵我", "准备睡", "在睡觉", "退下吧", "退下休息"]
+                if any(kw in user_text for kw in sleep_keywords) and not any(neg in user_text for neg in ["不睡", "没睡", "怎么睡", "别睡"]):
+                    try:
+                        from core.services.face_sentinel import FaceSentinel
+                        FaceSentinel().enter_sleep_mode(hours=8.0, reason=f"语音指令识别到休息意图: {user_text}")
+                    except Exception as se:
+                        self.logger.bind(tag=TAG).warning(f"Failed to enter sleep mode: {se}")
+
+                wake_keywords = ["早上好", "我起床了", "我醒了", "起床了", "睡醒了", "新的一天", "醒了"]
+                if any(kw in user_text for kw in wake_keywords):
+                    try:
+                        from core.services.face_sentinel import FaceSentinel
+                        if getattr(FaceSentinel(), "is_sleep_mode", False):
+                            FaceSentinel().exit_sleep_mode(reason=f"语音指令识别到起床意图: {user_text}")
+                    except Exception as se:
+                        self.logger.bind(tag=TAG).warning(f"Failed to exit sleep mode: {se}")
+
         # 为最顶层时新建会话ID和发送FIRST请求
         if depth == 0:
             current_sentence_id = str(uuid.uuid4().hex)

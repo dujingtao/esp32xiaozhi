@@ -41,7 +41,10 @@ def handle_exit_intent(conn: "ConnectionHandler", say_goodbye: str | None = None
         # 激活视觉哨兵 5 分钟告别/通话免打扰保护，防止在桌前打电话时被摄像头反复重新唤醒
         try:
             from core.services.face_sentinel import FaceSentinel
-            FaceSentinel().set_post_exit_cooldown(300)
+            if any(w in (say_goodbye or "") for w in ["睡", "休息", "好梦", "晚安"]):
+                FaceSentinel().enter_sleep_mode(hours=8.0, reason=f"handle_exit_intent触发入眠: {say_goodbye}")
+            else:
+                FaceSentinel().set_post_exit_cooldown(300)
         except Exception as se:
             logger.bind(tag=TAG).warning(f"Failed to set FaceSentinel exit cooldown: {se}")
 

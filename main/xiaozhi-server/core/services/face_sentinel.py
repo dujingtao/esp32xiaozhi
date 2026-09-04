@@ -1,4 +1,4 @@
-﻿import os
+import os
 import time
 import json
 import base64
@@ -90,7 +90,27 @@ class FaceSentinel:
         
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.worker_thread.start()
-        print(f"{TAG} v2.4.1 Sentinel Started: Precision VLM Parser & ONNX Deep Learning Active.")
+        print(f"{TAG} v2.5.0 Sentinel Started: Precision Sleep Mode & DND Guardian Active.")
+
+    def enter_sleep_mode(self, hours: float = 8.0, reason: str = "用户去休息/睡觉"):
+        """进入深度入眠免打扰模式：彻底锁死视觉打招呼、重入轻咳及开麦，绝不主动打扰"""
+        now_ts = time.time()
+        self.is_sleep_mode = True
+        self.sleep_mode_until = now_ts + hours * 3600
+        self.sleep_reason = reason
+        self.presence_state = "SLEEPING"
+        self.status = "sleep_silent"
+        until_str = datetime.fromtimestamp(self.sleep_mode_until).strftime('%Y-%m-%d %H:%M:%S')
+        print(f"{TAG} [SLEEP_MODE ACTIVATED] Entered Sleep Mode for {hours}h (until {until_str}). Reason: {reason}. All proactive visual wakeups completely muted.")
+
+    def exit_sleep_mode(self, reason: str = "用户起床/主动解除"):
+        """退出深度入眠免打扰模式：恢复正常视觉感知与迎宾状态"""
+        self.is_sleep_mode = False
+        self.sleep_mode_until = 0.0
+        self.sleep_reason = ""
+        self.presence_state = "PRESENT"
+        self.status = "monitoring"
+        print(f"{TAG} [SLEEP_MODE EXITED] Restored normal monitoring. Reason: {reason}.")
 
     def set_post_exit_cooldown(self, seconds=300):
         """用户主动告别/退出/打电话后，进入 5 分钟静默保护期，绝不主动打扰"""
@@ -141,11 +161,16 @@ class FaceSentinel:
         now_ts = time.time()
         absence_sec = int(now_ts - self.last_seen_time) if self.last_seen_time > 0 else 9999
         dnd_remaining = max(0, int(self.post_exit_mute_until - now_ts))
+        is_sleep = getattr(self, "is_sleep_mode", False)
+        sleep_rem = max(0, int(getattr(self, "sleep_mode_until", 0) - now_ts)) if is_sleep else 0
         return {
             "enabled": self.config.get("enabled", True),
             "status": getattr(self, "status", "monitoring"),
             "presence_state": getattr(self, "presence_state", "ABSENT"),
             "detector_engine": "ONNX_DeepLearning_YuNet" if self.dnn_detector else "Haar_Cascade",
+            "is_sleep_mode": is_sleep,
+            "sleep_mode_remaining_seconds": sleep_rem,
+            "sleep_reason": getattr(self, "sleep_reason", ""),
             "dnd_remaining_seconds": dnd_remaining,
             "last_greeted_person": getattr(self, "last_greeted_person", None),
             "absence_seconds": absence_sec,
@@ -508,6 +533,16 @@ class FaceSentinel:
                 continue
 
             now_ts = time.time()
+
+            # ── 0. 检查系统级入眠/休息免打扰模式 (SLEEP_MODE) ──
+            if getattr(self, "is_sleep_mode", False):
+                if now_ts >= getattr(self, "sleep_mode_until", 0):
+                    print(f"{TAG} Sleep mode duration expired. Automatically exiting sleep mode.")
+                    self.exit_sleep_mode(reason="定时到期自动解除")
+                else:
+                    self.status = "sleep_silent"
+                    time.sleep(1.0)
+                    continue
 
             # ── 1. 检查告别/通话 5 分钟免打扰静默保护锁 ──
             if getattr(self, "post_exit_mute_until", 0) > now_ts:

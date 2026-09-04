@@ -292,3 +292,19 @@ class FaceWebHandler:
         is_family = data.get("is_family", True)
         event = sentinel.trigger_greeting(name, is_family)
         return web.json_response({"code": 0, "success": True, "msg": "success", "data": event})
+
+    async def handle_sentinel_sleep(self, request):
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        sentinel = FaceSentinel()
+        action = data.get("action", "enter")
+        hours = float(data.get("hours", 8.0))
+        if action == "enter":
+            sentinel.enter_sleep_mode(hours=hours, reason="Web控制台手动进入睡眠模式")
+            msg = f"已进入入眠免打扰模式 ({hours}小时)"
+        else:
+            sentinel.exit_sleep_mode(reason="Web控制台手动解除睡眠模式")
+            msg = "已退出入眠免打扰模式，恢复正常看护"
+        return web.json_response({"code": 0, "success": True, "msg": msg, "data": sentinel.get_status()})

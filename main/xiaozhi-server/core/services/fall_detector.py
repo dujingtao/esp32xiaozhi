@@ -1,4 +1,4 @@
-﻿import os
+import os
 import time
 import json
 import base64
@@ -245,12 +245,25 @@ class FallDetector:
         self._send_pushplus_alert("🚨【紧急求助】老人疑似跌倒卧地不起！", html_card)
 
         # 3. 调度 ESP32 音箱现场大声问询并倾听反馈
+        try:
+            from core.services.face_sentinel import FaceSentinel
+            target_person = getattr(FaceSentinel(), "last_greeted_person", None)
+        except Exception:
+            target_person = None
+
+        if target_person:
+            salutation = f"【{target_person}】"
+            spoken_name = target_person
+        else:
+            salutation = "长辈/家庭成员"
+            spoken_name = "您"
+
         emergency_prompt = (
-            "[紧急跌倒问候事件]\n"
-            "【现场险情】：视觉看护中枢检测到房间老人发生身体卧倒且在地表超过8秒未能起身！\n"
-            "【交互指令】：请以极为关切、响亮清晰、沉稳温暖的声音立刻大声呼唤询问："
-            "'爷爷，您摔倒了吗？能听到我说话吗？如果需要帮助请大声回答我！'\n"
-            "【核心约束】：播报完毕后立刻长开麦克风倾听现场是否有老人的呼救声或呻吟声！"
+            f"[紧急跌倒问候事件]\n"
+            f"【现场险情】：视觉看护中枢检测到房间{salutation}发生身体卧倒且在地表超过8秒未能起身！\n"
+            f"【交互指令】：请以极为关切、响亮清晰、沉稳温暖的声音立刻大声呼唤询问："
+            f"'{spoken_name}，您摔倒了吗？能听到我说话吗？如果需要帮助请大声回答我！'\n"
+            f"【核心约束】：播报完毕后立刻长开麦克风倾听现场是否有呼救声或呻吟声！"
         )
         try:
             dispatched = ConnectionRegistry.broadcast_proactive_chat(emergency_prompt)
@@ -273,6 +286,18 @@ class FallDetector:
 
             now_ts = time.time()
             self.last_check_time = now_ts
+
+            # ── 0. 检查视觉哨兵是否正处于 SLEEP_MODE (睡眠期间在床上平躺为正常现象，静默看护) ──
+            try:
+                from core.services.face_sentinel import FaceSentinel
+                if getattr(FaceSentinel(), "is_sleep_mode", False):
+                    self.status = "sleep_guardian_passive"
+                    self.fall_start_time = 0
+                    self.fall_state = "NORMAL"
+                    time.sleep(1.0)
+                    continue
+            except Exception:
+                pass
 
             # 检查报警后冷却期
             cooldown_sec = self.config.get("alert_cooldown_seconds", 120)

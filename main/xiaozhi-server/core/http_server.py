@@ -97,6 +97,7 @@ class SimpleHttpServer:
                         web.post("/api/faces/sentinel/toggle", self.face_handler.handle_sentinel_toggle),
                         web.post("/api/faces/sentinel/config", self.face_handler.handle_sentinel_config),
                         web.post("/api/faces/sentinel/trigger_test", self.face_handler.handle_sentinel_trigger_test),
+                        web.post("/api/faces/sentinel/sleep", self.face_handler.handle_sentinel_sleep),
                         # 🚨 老人健康与跌倒危险看护路由
                         web.get("/api/fall/status", self.fall_handler.handle_fall_status),
                         web.post("/api/fall/toggle", self.fall_handler.handle_fall_toggle),
