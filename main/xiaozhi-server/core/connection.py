@@ -1499,6 +1499,7 @@ class ConnectionHandler:
                     },
                     "type": "function",
                     "index": idx,
+                    **({"extra_content": tool_call_data["extra_content"]} if "extra_content" in tool_call_data else {}),
                 }
                 for idx, (_, tool_call_data) in enumerate(record_tools)
             ]
@@ -1542,6 +1543,7 @@ class ConnectionHandler:
                     },
                     "type": "function",
                     "index": idx,
+                    **({"extra_content": tool_call_data["extra_content"]} if "extra_content" in tool_call_data else {}),
                 }
                 for idx, (_, tool_call_data) in enumerate(need_llm_tools)
             ]
@@ -1913,3 +1915,13 @@ class ConnectionHandler:
                 tool_calls_list[tool_index]["name"] = tool_call.function.name
             if tool_call.function.arguments:
                 tool_calls_list[tool_index]["arguments"] += tool_call.function.arguments
+
+            # 提取并保留 extra_content（例如 Google Gemini 3.x/2.5 的 thought_signature 思考链签名）
+            extra = getattr(tool_call, "extra_content", None)
+            if not extra and hasattr(tool_call, "model_extra") and isinstance(tool_call.model_extra, dict):
+                extra = tool_call.model_extra.get("extra_content")
+            if extra:
+                if "extra_content" not in tool_calls_list[tool_index]:
+                    tool_calls_list[tool_index]["extra_content"] = extra
+                elif isinstance(extra, dict) and isinstance(tool_calls_list[tool_index]["extra_content"], dict):
+                    tool_calls_list[tool_index]["extra_content"].update(extra)
