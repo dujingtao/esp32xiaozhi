@@ -47,14 +47,134 @@ void McpServer::AddCommonTools() {
     // Do not add custom tools here.
     // Custom tools must be added in the board's InitializeTools function.
 
+    // [端侧设备状态增强]: 在原有设备硬件状态基础上，追加 device_info（自定义名称、多级物理位置与当前生效唤醒词），
+    // 使得大模型在每次回答或控制设备时，能即时获知该台 ESP32 的空间归属与唤醒配置
     AddTool("self.get_device_status",
-        "Provides the real-time information of the device, including the current status of the audio speaker, screen, battery, network, etc.\n"
+        "Provides the real-time information of the device, including the current status of the audio speaker, screen, battery, network, device name, and location.\n"
         "Use this tool for: \n"
-        "1. Answering questions about current condition (e.g. what is the current volume of the audio speaker?)\n"
+        "1. Answering questions about current condition (e.g. what is the current volume, who are you, where are you?)\n"
         "2. As the first step to control the device (e.g. turn up / down the volume of the audio speaker, etc.)",
         PropertyList(),
         [&board](const PropertyList& properties) -> ReturnValue {
-            return board.GetDeviceStatusJson();
+            std::string status_json = board.GetDeviceStatusJson();
+            cJSON* root = cJSON_Parse(status_json.c_str());
+            if (root != nullptr) {
+                // 1. 读取 NVS "device" 分区获取名称与多级位置
+                Settings settings("device");
+                cJSON* dev_info = cJSON_CreateObject();
+                cJSON_AddStringToObject(dev_info, "name", settings.GetString("name", "小智").c_str());
+                cJSON* loc = cJSON_CreateObject();
+                cJSON_AddStringToObject(loc, "city", settings.GetString("city", "").c_str());
+                cJSON_AddStringToObject(loc, "place", settings.GetString("place", "").c_str());
+                cJSON_AddStringToObject(loc, "room", settings.GetString("room", "").c_str());
+                cJSON_AddItemToObject(dev_info, "location", loc);
+
+                // 2. 读取 NVS "wake_word" 分区获取当前唤醒词配置
+                Settings wake_settings("wake_word");
+                cJSON* wake = cJSON_CreateObject();
+                cJSON_AddStringToObject(wake, "pinyin", wake_settings.GetString("command", "ni hao xiao zhi").c_str());
+                cJSON_AddStringToObject(wake, "text", wake_settings.GetString("text", "你好小智").c_str());
+                cJSON_AddNumberToObject(wake, "threshold", wake_settings.GetInt("threshold", 20));
+                cJSON_AddItemToObject(dev_info, "wake_word", wake);
+
+                cJSON_AddItemToObject(root, "device_info", dev_info);
+                char* print_str = cJSON_PrintUnformatted(root);
+                std::string result(print_str);
+                cJSON_free(print_str);
+                cJSON_Delete(root);
+                return result;
+            }
+            return status_json;
+        });
+
+    // [端侧设备命名工具]: 允许用户通过语音指令修改设备身份名称（如“客厅小智”、“贾维斯”），持久化存入 NVS
+    AddTool("self.device.set_name",
+        "Set the custom name or identity of this device (e.g. '客厅小智', '贾维斯'). Use this tool when the user asks to rename the device or give it a new name.",
+        PropertyList({
+            Property("name", kPropertyTypeString)
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto name = properties["name"].value<std::string>();
+            Settings settings("device", true);
+            settings.SetString("name", name);
+            return "Device name updated to: " + name;
+        });
+
+    // [端侧多级物理位置工具]: 空间多级架构（城市/场所/房间），免 GPS 纯软件持久化记录设备所处空间
+    AddTool("self.device.set_location",
+        "Set the physical location of this device, including city (e.g. '深圳'), place (e.g. '家里', '公司'), and room (e.g. '客厅', '书房', '主卧'). Use this tool when the user tells the device where it is located or moved to.",
+        PropertyList({
+            Property("city", kPropertyTypeString, std::string("")),
+            Property("place", kPropertyTypeString, std::string("")),
+            Property("room", kPropertyTypeString, std::string(""))
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto city = properties["city"].value<std::string>();
+            auto place = properties["place"].value<std::string>();
+            auto room = properties["room"].value<std::string>();
+            Settings settings("device", true);
+            if (!city.empty()) {
+                settings.SetString("city", city);
+            }
+            if (!place.empty()) {
+                settings.SetString("place", place);
+            }
+            if (!room.empty()) {
+                settings.SetString("room", room);
+            }
+            return "Device location updated: city=" + settings.GetString("city", "") +
+                   ", place=" + settings.GetString("place", "") +
+                   ", room=" + settings.GetString("room", "");
+        });
+
+    // [端侧自定义唤醒词工具]: 允许用户通过语音直接设置唤醒词，写入 NVS Flash 供唤醒引擎加载
+    AddTool("self.device.set_wake_word",
+        "Set the custom wake word of this device. 'pinyin' is the pinyin of the wake word separated by spaces (e.g. 'jia wei si', 'xiao tu dou'). 'text' is the display/Chinese text (e.g. '贾维斯'). 'threshold' is sensitivity (1-99, default 20, smaller is more sensitive).",
+        PropertyList({
+            Property("pinyin", kPropertyTypeString),
+            Property("text", kPropertyTypeString, std::string("")),
+            Property("threshold", kPropertyTypeInteger, 20, 1, 99)
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto pinyin = properties["pinyin"].value<std::string>();
+            auto text = properties["text"].value<std::string>();
+            auto threshold = properties["threshold"].value<int>();
+            if (text.empty()) {
+                text = pinyin;
+            }
+            Settings settings("wake_word", true);
+            settings.SetString("command", pinyin);
+            settings.SetString("text", text);
+            settings.SetInt("threshold", threshold);
+            return "Wake word updated to: " + text + " (" + pinyin + ") with threshold " + std::to_string(threshold);
+        });
+
+    // [端侧设备信息查询工具]: 一键获取设备名称、完整空间坐标以及当前唤醒词
+    AddTool("self.device.get_info",
+        "Get this device's name, location, and wake word information.",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            Settings settings("device");
+            cJSON* root = cJSON_CreateObject();
+            cJSON_AddStringToObject(root, "name", settings.GetString("name", "小智").c_str());
+            cJSON* loc = cJSON_CreateObject();
+            cJSON_AddStringToObject(loc, "city", settings.GetString("city", "").c_str());
+            cJSON_AddStringToObject(loc, "place", settings.GetString("place", "").c_str());
+            cJSON_AddStringToObject(loc, "room", settings.GetString("room", "").c_str());
+            cJSON_AddItemToObject(root, "location", loc);
+
+            Settings wake_settings("wake_word");
+            cJSON* wake = cJSON_CreateObject();
+            cJSON_AddStringToObject(wake, "pinyin", wake_settings.GetString("command", "ni hao xiao zhi").c_str());
+            cJSON_AddStringToObject(wake, "text", wake_settings.GetString("text", "你好小智").c_str());
+            cJSON_AddNumberToObject(wake, "threshold", wake_settings.GetInt("threshold", 20));
+            cJSON_AddItemToObject(root, "wake_word", wake);
+
+            char* print_str = cJSON_PrintUnformatted(root);
+            std::string result(print_str);
+            cJSON_free(print_str);
+            cJSON_Delete(root);
+            return result;
         });
 
     AddTool("self.audio_speaker.set_volume", 

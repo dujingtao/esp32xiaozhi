@@ -185,6 +185,29 @@ esp_err_t Ota::CheckVersion() {
         ESP_LOGI(TAG, "No websocket section found!");
     }
 
+    // [云端控制台同步 - 唤醒词]: OTA 检查响应中若下发了 wake_word 配置，自动写入本地 NVS Flash
+    cJSON* wake_word = cJSON_GetObjectItem(root, "wake_word");
+    if (cJSON_IsObject(wake_word)) {
+        Settings settings("wake_word", true);
+        auto command = cJSON_GetObjectItem(wake_word, "command");
+        if (cJSON_IsString(command)) {
+            settings.SetString("command", command->valuestring);
+        } else {
+            auto pinyin = cJSON_GetObjectItem(wake_word, "pinyin");
+            if (cJSON_IsString(pinyin)) {
+                settings.SetString("command", pinyin->valuestring);
+            }
+        }
+        auto text = cJSON_GetObjectItem(wake_word, "text");
+        if (cJSON_IsString(text)) {
+            settings.SetString("text", text->valuestring);
+        }
+        auto threshold = cJSON_GetObjectItem(wake_word, "threshold");
+        if (cJSON_IsNumber(threshold)) {
+            settings.SetInt("threshold", threshold->valueint);
+        }
+    }
+
     has_server_time_ = false;
     cJSON *server_time = cJSON_GetObjectItem(root, "server_time");
     if (cJSON_IsObject(server_time)) {

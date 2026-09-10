@@ -2,6 +2,7 @@
 #include "audio_service.h"
 #include "system_info.h"
 #include "assets.h"
+#include "settings.h"
 
 #include <esp_log.h>
 #include <esp_mn_iface.h>
@@ -90,13 +91,30 @@ bool CustomWakeWord::Initialize(AudioCodec* codec, srmodel_list_t* models_list) 
         language_ = "cn";
         models_ = esp_srmodel_init("model");
         owns_models_ = models_ != nullptr;
-#ifdef CONFIG_CUSTOM_WAKE_WORD
-        threshold_ = CONFIG_CUSTOM_WAKE_WORD_THRESHOLD / 100.0f;
-        commands_.push_back({CONFIG_CUSTOM_WAKE_WORD, CONFIG_CUSTOM_WAKE_WORD_DISPLAY, "wake"});
-#endif
     } else {
         models_ = models_list;
         ParseWakenetModelConfig();
+    }
+
+    // 自定义唤醒词加载策略（优先级：1. NVS 本地用户配置 -> 2. index.json -> 3. Kconfig 编译期默认配置）
+    // 允许用户在不重新编译固件的情况下，通过 Web 控制台或语音指令持久化自定义唤醒词
+    Settings settings("wake_word");
+    std::string nvs_cmd = settings.GetString("command");
+    std::string nvs_text = settings.GetString("text");
+    int nvs_threshold = settings.GetInt("threshold", 0);
+    if (!nvs_cmd.empty()) {
+        commands_.clear();
+        commands_.push_back({nvs_cmd, nvs_text.empty() ? nvs_cmd : nvs_text, "wake"});
+        if (nvs_threshold > 0) {
+            threshold_ = nvs_threshold / 100.0f;
+        }
+        ESP_LOGI(TAG, "Loaded wake word from NVS: %s (%s), threshold: %.2f", nvs_cmd.c_str(), nvs_text.c_str(), threshold_);
+    } else if (commands_.empty()) {
+#ifdef CONFIG_CUSTOM_WAKE_WORD
+        threshold_ = CONFIG_CUSTOM_WAKE_WORD_THRESHOLD / 100.0f;
+        commands_.push_back({CONFIG_CUSTOM_WAKE_WORD, CONFIG_CUSTOM_WAKE_WORD_DISPLAY, "wake"});
+        ESP_LOGI(TAG, "Using default custom wake word: %s (%s)", CONFIG_CUSTOM_WAKE_WORD, CONFIG_CUSTOM_WAKE_WORD_DISPLAY);
+#endif
     }
 
     if (models_ == nullptr || models_->num == -1) {
@@ -307,4 +325,43 @@ bool CustomWakeWord::GetWakeWordOpus(std::vector<uint8_t>& opus) {
     opus.swap(wake_word_opus_.front());
     wake_word_opus_.pop_front();
     return !opus.empty();
+}
+
+/**
+ * @brief 运行时动态设置并生效新的自定义唤醒词
+ * 
+ * 1. 参数校验与持久化：写入 NVS 命名空间 "wake_word"（command, text, threshold）确保掉电不丢；
+ * 2. 内存状态同步：更新内存中的 commands_ 列表及阈值；
+ * 3. 语音引擎热重载：在 input_buffer_mutex_ 保护下清除旧词列表并注入新词，调用 esp_mn_commands_update() 重构声学 FST 识别图。
+ */
+bool CustomWakeWord::SetWakeWord(const std::string& command, const std::string& text, int threshold) {
+    if (command.empty()) {
+        return false;
+    }
+    // 1. 持久化存储至 NVS Flash
+    Settings settings("wake_word", true);
+    settings.SetString("command", command);
+    settings.SetString("text", text.empty() ? command : text);
+    if (threshold > 0) {
+        settings.SetInt("threshold", threshold);
+        threshold_ = threshold / 100.0f;
+    }
+
+    // 2. 更新内存命令列表
+    commands_.clear();
+    commands_.push_back({command, text.empty() ? command : text, "wake"});
+
+    // 3. 热重载底层 Multinet 识别引擎
+    if (multinet_model_data_ != nullptr && multinet_ != nullptr) {
+        if (threshold > 0) {
+            multinet_->set_det_threshold(multinet_model_data_, threshold_);
+        }
+        std::lock_guard<std::mutex> lock(input_buffer_mutex_);
+        esp_mn_commands_clear();
+        esp_mn_commands_add(1, command.c_str());
+        esp_mn_commands_update();
+        ESP_LOGI(TAG, "Speech command updated dynamically: %s (%s)", command.c_str(), text.c_str());
+        multinet_->print_active_speech_commands(multinet_model_data_);
+    }
+    return true;
 }

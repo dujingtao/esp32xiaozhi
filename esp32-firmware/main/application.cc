@@ -265,7 +265,7 @@ void Application::Run() {
             // Print debug info and send heartbeat ping every 10 seconds
             if (clock_ticks_ % 10 == 0) {
                 if (protocol_ && protocol_->IsAudioChannelOpened()) {
-                    protocol_->SendText("{\"type\":\"ping\"}");
+                    protocol_->SendPing();
                 }
                 SystemInfo::PrintHeapStats();
                 // SystemInfo::PrintTaskList();

@@ -367,6 +367,35 @@ std::string MqttProtocol::GetHelloMessage() {
     cJSON_AddNumberToObject(audio_params, "channels", 1);
     cJSON_AddNumberToObject(audio_params, "frame_duration", OPUS_FRAME_DURATION_MS);
     cJSON_AddItemToObject(root, "audio_params", audio_params);
+
+    // [设备身份与唤醒词上报]: 客户端握手时自动上报当前设备的自定义名字、空间多级位置以及生效中的唤醒词
+    Settings device_settings("device");
+    std::string dev_name = device_settings.GetString("name");
+    std::string city = device_settings.GetString("city");
+    std::string place = device_settings.GetString("place");
+    std::string room = device_settings.GetString("room");
+    cJSON* device_info = nullptr;
+    if (!dev_name.empty() || !city.empty() || !place.empty() || !room.empty()) {
+        device_info = cJSON_CreateObject();
+        if (!dev_name.empty()) cJSON_AddStringToObject(device_info, "name", dev_name.c_str());
+        if (!city.empty()) cJSON_AddStringToObject(device_info, "city", city.c_str());
+        if (!place.empty()) cJSON_AddStringToObject(device_info, "place", place.c_str());
+        if (!room.empty()) cJSON_AddStringToObject(device_info, "room", room.c_str());
+        cJSON_AddItemToObject(root, "device_info", device_info);
+    }
+
+    Settings wake_settings("wake_word");
+    std::string wake_cmd = wake_settings.GetString("command");
+    std::string wake_text = wake_settings.GetString("text");
+    if (!wake_cmd.empty()) {
+        if (device_info == nullptr) {
+            device_info = cJSON_CreateObject();
+            cJSON_AddItemToObject(root, "device_info", device_info);
+        }
+        cJSON_AddStringToObject(device_info, "wake_pinyin", wake_cmd.c_str());
+        cJSON_AddStringToObject(device_info, "wake_text", wake_text.c_str());
+    }
+
     auto json_str = cJSON_PrintUnformatted(root);
     std::string message(json_str);
     cJSON_free(json_str);
@@ -397,6 +426,43 @@ void MqttProtocol::ParseServerHello(const cJSON* root) {
         auto frame_duration = cJSON_GetObjectItem(audio_params, "frame_duration");
         if (cJSON_IsNumber(frame_duration)) {
             server_frame_duration_ = frame_duration->valueint;
+        }
+    }
+
+    // [云端控制台同步 - 设备信息]: 将服务端返回的最新名字与多级位置持久化至 NVS
+    auto device_info = cJSON_GetObjectItem(root, "device_info");
+    if (cJSON_IsObject(device_info)) {
+        Settings settings("device", true);
+        auto name = cJSON_GetObjectItem(device_info, "name");
+        if (cJSON_IsString(name)) settings.SetString("name", name->valuestring);
+        auto city = cJSON_GetObjectItem(device_info, "city");
+        if (cJSON_IsString(city)) settings.SetString("city", city->valuestring);
+        auto place = cJSON_GetObjectItem(device_info, "place");
+        if (cJSON_IsString(place)) settings.SetString("place", place->valuestring);
+        auto room = cJSON_GetObjectItem(device_info, "room");
+        if (cJSON_IsString(room)) settings.SetString("room", room->valuestring);
+    }
+
+    // [云端控制台同步 - 唤醒词]: 将服务端返回的最新唤醒词配置持久化至 NVS
+    auto wake_word = cJSON_GetObjectItem(root, "wake_word");
+    if (cJSON_IsObject(wake_word)) {
+        Settings settings("wake_word", true);
+        auto command = cJSON_GetObjectItem(wake_word, "command");
+        if (cJSON_IsString(command)) {
+            settings.SetString("command", command->valuestring);
+        } else {
+            auto pinyin = cJSON_GetObjectItem(wake_word, "pinyin");
+            if (cJSON_IsString(pinyin)) {
+                settings.SetString("command", pinyin->valuestring);
+            }
+        }
+        auto text = cJSON_GetObjectItem(wake_word, "text");
+        if (cJSON_IsString(text)) {
+            settings.SetString("text", text->valuestring);
+        }
+        auto threshold = cJSON_GetObjectItem(wake_word, "threshold");
+        if (cJSON_IsNumber(threshold)) {
+            settings.SetInt("threshold", threshold->valueint);
         }
     }
 
