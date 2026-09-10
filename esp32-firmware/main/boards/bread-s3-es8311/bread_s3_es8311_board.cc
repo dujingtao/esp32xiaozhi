@@ -5,6 +5,7 @@
 #include "button.h"
 #include "config.h"
 #include "led/single_led.h"
+#include <wifi_manager.h>
 
 #include <esp_log.h>
 #include <driver/i2c_master.h>
@@ -105,10 +106,18 @@ private:
     }
 
     void InitializeButtons() {
+        boot_button_.OnLongPress([this]() {
+            ESP_LOGI(TAG, "BOOT button long-pressed, entering WiFi config mode");
+            EnterWifiConfigMode();
+        });
+
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
-            if (app.GetDeviceState() == kDeviceStateStarting) {
-                EnterWifiConfigMode();
+            auto state = app.GetDeviceState();
+            if (state == kDeviceStateWifiConfiguring) {
+                ESP_LOGI(TAG, "BOOT clicked in config mode, retrying WiFi connection");
+                WifiManager::GetInstance().StopConfigAp();
+                TryWifiConnect();
                 return;
             }
             app.ToggleChatState();
@@ -147,6 +156,12 @@ public:
 
     virtual Display* GetDisplay() override {
         return display_;
+    }
+
+    virtual void SetPowerSaveLevel(PowerSaveLevel level) override {
+        // 面包板为 USB 常电供电（无电池），始终保持 PERFORMANCE 性能模式（禁用 Wi-Fi Modem Sleep）
+        // 彻底消除由于 DTIM 省电休眠导致的下行网络延迟与语音播放卡顿
+        WifiBoard::SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
     }
 };
 

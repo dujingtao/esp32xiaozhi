@@ -13,6 +13,8 @@
                 "CONFIG_CUSTOM_WAKE_WORD=\"ni hao xiao zhi\"",
                 "CONFIG_CUSTOM_WAKE_WORD_DISPLAY=\"你好小智\"",
                 "CONFIG_CUSTOM_WAKE_WORD_THRESHOLD=20",
+                "CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y",
+                "CONFIG_ESP32S3_DEFAULT_CPU_FREQ_MHZ=240",
                 "CONFIG_SEND_WAKE_WORD_DATA=y",
                 "CONFIG_OTA_URL=\"http://141.148.138.135:8002/xiaozhi/ota/\""
             ]

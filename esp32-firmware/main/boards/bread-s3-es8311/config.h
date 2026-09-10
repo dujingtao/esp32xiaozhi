@@ -3,9 +3,9 @@
 
 #include <driver/gpio.h>
 
-// 音频采样率 (ES8311 双工模式推荐 24000Hz)
-#define AUDIO_INPUT_SAMPLE_RATE  24000
-#define AUDIO_OUTPUT_SAMPLE_RATE 24000
+// 音频采样率 (标准 16000Hz 单声道，与服务端原生 Opus 对齐，免二次软件重采样开销)
+#define AUDIO_INPUT_SAMPLE_RATE  16000
+#define AUDIO_OUTPUT_SAMPLE_RATE 16000
 
 // I2S 数字音频接口引脚 (ES8311 + NS4150B)
 #define AUDIO_I2S_GPIO_MCLK GPIO_NUM_38

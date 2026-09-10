@@ -11,6 +11,9 @@
 #include <esp_network.h>
 #include <esp_log.h>
 #include <esp_mac.h>
+#include <esp_wifi.h>
+#include <esp_netif.h>
+#include <esp_netif_ip_addr.h>
 #include <utility>
 
 #include <material_symbols.h>
@@ -49,10 +52,62 @@ std::string WifiBoard::GetBoardType() {
     return "wifi";
 }
 
+static esp_timer_handle_t s_dhcp_fallback_timer = nullptr;
+
+static void trigger_dhcp_fallback_timer(uint64_t timeout_us) {
+    if (!s_dhcp_fallback_timer) {
+        esp_timer_create_args_t fb_args = {
+            .callback = [](void* timer_arg) {
+                esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+                if (netif) {
+                    esp_netif_ip_info_t ip_info;
+                    if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr == 0) {
+                        ESP_LOGW(TAG, "DHCP timed out, applying fallback static IP 192.168.1.188");
+                        esp_netif_dhcpc_stop(netif);
+                        esp_netif_str_to_ip4("192.168.1.188", &ip_info.ip);
+                        esp_netif_str_to_ip4("192.168.1.1", &ip_info.gw);
+                        esp_netif_str_to_ip4("255.255.255.0", &ip_info.netmask);
+                        esp_netif_set_ip_info(netif, &ip_info);
+
+                        esp_netif_dns_info_t dns_info = {};
+                        esp_netif_str_to_ip4("192.168.1.1", (esp_ip4_addr_t*)&dns_info.ip.u_addr.ip4);
+                        dns_info.ip.type = ESP_IPADDR_TYPE_V4;
+                        esp_netif_set_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns_info);
+
+                        esp_netif_dns_info_t backup_dns = {};
+                        esp_netif_str_to_ip4("114.114.114.114", (esp_ip4_addr_t*)&backup_dns.ip.u_addr.ip4);
+                        backup_dns.ip.type = ESP_IPADDR_TYPE_V4;
+                        esp_netif_set_dns_info(netif, ESP_NETIF_DNS_BACKUP, &backup_dns);
+
+                        ip_event_got_ip_t evt = {};
+                        evt.esp_netif = netif;
+                        evt.ip_info = ip_info;
+                        evt.ip_changed = true;
+                        esp_event_post(IP_EVENT, IP_EVENT_STA_GOT_IP, &evt, sizeof(evt), portMAX_DELAY);
+                    }
+                }
+            },
+            .arg = nullptr,
+            .dispatch_method = ESP_TIMER_TASK,
+            .name = "dhcp_fallback",
+            .skip_unhandled_events = true
+        };
+        esp_timer_create(&fb_args, &s_dhcp_fallback_timer);
+    }
+    esp_timer_stop(s_dhcp_fallback_timer);
+    esp_timer_start_once(s_dhcp_fallback_timer, timeout_us);
+}
+
+static void cancel_dhcp_fallback_timer() {
+    if (s_dhcp_fallback_timer) {
+        esp_timer_stop(s_dhcp_fallback_timer);
+    }
+}
+
 void WifiBoard::StartNetwork() {
     auto& wifi_manager = WifiManager::GetInstance();
 
-    // Initialize WiFi manager
+    // Configure wifi manager settings
     WifiManagerConfig config;
     config.ssid_prefix = "Xiaozhi";
     config.language = Lang::CODE;
@@ -68,6 +123,13 @@ void WifiBoard::StartNetwork() {
         config.station_hostname = hostname;
     }
     wifi_manager.Initialize(config);
+
+    // Register STA connected handler: disable power save immediately upon link association and set up DHCP fallback timer
+    esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_CONNECTED, [](void* arg, esp_event_base_t base, int32_t id, void* data) {
+        ESP_LOGI(TAG, "WiFi STA connected to AP, immediately disabling modem sleep (WIFI_PS_NONE)");
+        esp_wifi_set_ps(WIFI_PS_NONE);
+        trigger_dhcp_fallback_timer(10 * 1000000ULL);
+    }, nullptr);
 
     // Set unified event callback - forward to NetworkEvent with SSID data
     wifi_manager.SetEventCallback([this](WifiEvent event, const std::string& data) {
@@ -118,6 +180,8 @@ void WifiBoard::TryWifiConnect() {
         ESP_LOGI(TAG, "Starting WiFi connection attempt");
         esp_timer_start_once(connect_timer_, CONNECT_TIMEOUT_SEC * 1000000ULL);
         WifiManager::GetInstance().StartStation();
+        // Disable power save to ensure broadcast/DHCP packets are never missed by modem sleep
+        esp_wifi_set_ps(WIFI_PS_NONE);
     } else {
         // No SSID configured, enter config mode
         // Wait for the board version to be shown
@@ -129,6 +193,8 @@ void WifiBoard::TryWifiConnect() {
 void WifiBoard::OnNetworkEvent(NetworkEvent event, const std::string& data) {
     switch (event) {
         case NetworkEvent::Connected:
+            cancel_dhcp_fallback_timer();
+            esp_wifi_set_ps(WIFI_PS_NONE);
             // Stop timeout timer
             esp_timer_stop(connect_timer_);
 #ifdef CONFIG_USE_ESP_BLUFI_WIFI_PROVISIONING
@@ -143,9 +209,12 @@ void WifiBoard::OnNetworkEvent(NetworkEvent event, const std::string& data) {
             break;
         case NetworkEvent::Connecting:
             ESP_LOGI(TAG, "WiFi connecting to %s", data.c_str());
+            esp_wifi_set_ps(WIFI_PS_NONE);
+            trigger_dhcp_fallback_timer(15 * 1000000ULL);
             break;
         case NetworkEvent::Disconnected:
             ESP_LOGW(TAG, "WiFi disconnected");
+            cancel_dhcp_fallback_timer();
             break;
         case NetworkEvent::WifiConfigModeEnter:
             ESP_LOGI(TAG, "WiFi config mode entered");
@@ -173,10 +242,20 @@ void WifiBoard::SetNetworkEventCallback(NetworkEventCallback callback) {
 
 void WifiBoard::OnWifiConnectTimeout(void* arg) {
     auto* board = static_cast<WifiBoard*>(arg);
-    ESP_LOGW(TAG, "WiFi connection timeout, entering config mode");
+    ESP_LOGW(TAG, "WiFi connection timeout");
 
+    auto& ssid_manager = SsidManager::GetInstance();
+    if (ssid_manager.GetSsidList().empty()) {
+        ESP_LOGW(TAG, "No SSID configured, entering config mode");
+        WifiManager::GetInstance().StopStation();
+        board->StartWifiConfigMode();
+        return;
+    }
+
+    ESP_LOGW(TAG, "Known SSID configured, restarting Station to retry connection");
     WifiManager::GetInstance().StopStation();
-    board->StartWifiConfigMode();
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    board->TryWifiConnect();
 }
 
 void WifiBoard::StartWifiConfigMode() {
