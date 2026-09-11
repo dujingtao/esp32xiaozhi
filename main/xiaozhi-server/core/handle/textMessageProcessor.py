@@ -23,6 +23,7 @@ class TextMessageProcessor:
             # 处理JSON消息
             if isinstance(msg_json, dict):
                 message_type = msg_json.get("type")
+                conn.last_activity_time = time.time() * 1000
 
                 # 记录日志
                 conn.logger.bind(tag=TAG).info(f"收到{message_type}消息：{message}")

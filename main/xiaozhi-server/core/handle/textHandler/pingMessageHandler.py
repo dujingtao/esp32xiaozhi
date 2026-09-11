@@ -23,15 +23,15 @@ class PingMessageHandler(TextMessageHandler):
             conn: WebSocket连接对象
             msg_json: PING消息的JSON数据
         """
-        # 检查是否启用了WebSocket心跳功能
-        enable_websocket_ping = conn.config.get("enable_websocket_ping", False)
+        # 只要收到客户端PING心跳，必须刷新活动时间戳，避免被_check_timeout超时误关连接
+        conn.last_activity_time = time.time() * 1000
+
+        # 检查是否启用了WebSocket心跳回复
+        enable_websocket_ping = conn.config.get("enable_websocket_ping", True)
         if not enable_websocket_ping:
-            conn.logger.debug(f"WebSocket心跳功能未启用，忽略PING消息")
             return
 
         try:
-            conn.logger.debug(f"收到PING消息，发送PONG响应")
-            conn.last_activity_time = time.time() * 1000
             # 构造PONG响应消息
             pong_message = {
                 "type": "pong",
