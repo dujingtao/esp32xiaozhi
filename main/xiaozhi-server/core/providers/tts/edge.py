@@ -1,5 +1,6 @@
 import os
 import uuid
+import asyncio
 import edge_tts
 from datetime import datetime
 from core.providers.tts.base import TTSProviderBase
