@@ -508,9 +508,13 @@ class TTSProviderBase(ABC):
             segment_text = textUtils.get_string_no_punctuation_or_emoji(
                 segment_text_raw
             )
+            # 如果是第一句话且文本过短（少于4个字符），且后续文本流未结束，不急于提前断句，避免造成后句等待空档（断断续续）
+            if self.is_first_sentence and len(segment_text.strip()) < 4 and not self.tts_stop_request:
+                return None
+
             self.processed_chars += len(segment_text_raw)  # 更新已处理字符位置
 
-            # 如果是第一句话，在找到第一个逗号后，将标志设置为False
+            # 如果是第一句话，在找到第一个有效断句后，将标志设置为False
             if self.is_first_sentence:
                 self.is_first_sentence = False
 
