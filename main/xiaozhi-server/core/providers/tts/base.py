@@ -387,8 +387,10 @@ class TTSProviderBase(ABC):
                     self.tts_audio_first_sentence = True
                 elif ContentType.TEXT == message.content_type:
                     self.tts_text_buff.append(message.content_detail)
-                    segment_text = self._get_segment_text()
-                    if segment_text:
+                    while True:
+                        segment_text = self._get_segment_text()
+                        if not segment_text:
+                            break
                         self.to_tts_stream(segment_text, opus_handler=self.handle_opus)
                 elif ContentType.FILE == message.content_type:
                     self._process_remaining_text_stream(opus_handler=self.handle_opus)
@@ -398,6 +400,7 @@ class TTSProviderBase(ABC):
                             tts_file, callback=self.handle_opus
                         )
                 if message.sentence_type == SentenceType.LAST:
+                    self.tts_stop_request = True
                     self._process_remaining_text_stream(opus_handler=self.handle_opus)
                     self.tts_audio_queue.put(
                         (message.sentence_type, [], message.content_detail, message.sentence_id)
@@ -487,44 +490,55 @@ class TTSProviderBase(ABC):
         # 合并当前全部文本并处理未分割部分
         full_text = "".join(self.tts_text_buff)
         current_text = full_text[self.processed_chars :]  # 从未处理的位置开始
-        last_punct_pos = -1
+        if not current_text:
+            return None
 
-        # 根据是否是第一句话选择不同的标点符号集合
-        punctuations_to_use = (
-            self.first_sentence_punctuations
-            if self.is_first_sentence
-            else self.punctuations
-        )
+        clean_text = textUtils.get_string_no_punctuation_or_emoji(current_text).strip()
 
-        for punct in punctuations_to_use:
-            pos = current_text.rfind(punct)
-            if (pos != -1 and last_punct_pos == -1) or (
-                pos != -1 and pos < last_punct_pos
-            ):
-                last_punct_pos = pos
+        # 如果LLM未完成输出 (not self.tts_stop_request)
+        # 为保证非流式TTS的播放平滑度，避免过短切片导致后句下载期间喇叭断音（断断续续）：
+        # 1. 至少累积到指定最小长度才允许断句（第一句>=15字，后续>=22字）
+        # 2. 如果累积字数不够，继续等待LLM产生更多内容
+        min_chars = 15 if self.is_first_sentence else 22
+        if not self.tts_stop_request and len(clean_text) < min_chars:
+            return None
 
-        if last_punct_pos != -1:
-            segment_text_raw = current_text[: last_punct_pos + 1]
-            segment_text = textUtils.get_string_no_punctuation_or_emoji(
-                segment_text_raw
-            )
-            # 如果是第一句话且文本过短（少于4个字符），且后续文本流未结束，不急于提前断句，避免造成后句等待空档（断断续续）
-            if self.is_first_sentence and len(segment_text.strip()) < 4 and not self.tts_stop_request:
+        split_pos = -1
+        strong_puncts = ("。", "？", "?", "！", "!", "\n")
+        weak_puncts = ("；", ";", "，", ",", "、", "：", ":", "~")
+
+        # 优先倒序寻找强标点（句号、问号、感叹号、换行），切成完整长句
+        for p in strong_puncts:
+            pos = current_text.rfind(p)
+            if pos > split_pos:
+                split_pos = pos
+
+        # 若未找到强标点，但文本已较长（>=28字）或处于结束请求，才在次要标点切分
+        if split_pos == -1 and (len(clean_text) >= 28 or self.tts_stop_request):
+            for p in weak_puncts:
+                pos = current_text.rfind(p)
+                if pos > split_pos:
+                    split_pos = pos
+
+        # 找到有效断句点
+        if split_pos != -1:
+            segment_text_raw = current_text[: split_pos + 1]
+            segment_text = textUtils.get_string_no_punctuation_or_emoji(segment_text_raw)
+            if not segment_text.strip():
+                # 仅包含标点，跳过
+                self.processed_chars += len(segment_text_raw)
                 return None
-
-            self.processed_chars += len(segment_text_raw)  # 更新已处理字符位置
-
-            # 如果是第一句话，在找到第一个有效断句后，将标志设置为False
+            self.processed_chars += len(segment_text_raw)
             if self.is_first_sentence:
                 self.is_first_sentence = False
-
-            return segment_text
+            return segment_text_raw.strip()
         elif self.tts_stop_request and current_text:
-            segment_text = current_text
-            self.is_first_sentence = True  # 重置标志
-            return segment_text
-        else:
-            return None
+            segment_text = textUtils.get_string_no_punctuation_or_emoji(current_text)
+            self.processed_chars += len(current_text)
+            self.is_first_sentence = True
+            return current_text.strip() if segment_text.strip() else None
+
+        return None
 
     def _process_audio_file_stream(
         self, tts_file, callback: Callable[[Any], Any]
@@ -578,10 +592,12 @@ class TTSProviderBase(ABC):
         remaining_text = full_text[self.processed_chars :]
         if remaining_text:
             segment_text = textUtils.get_string_no_punctuation_or_emoji(remaining_text)
-            if segment_text:
-                self.to_tts_stream(segment_text, opus_handler=opus_handler)
-                self.processed_chars += len(full_text)
+            if segment_text and segment_text.strip():
+                self.to_tts_stream(remaining_text.strip(), opus_handler=opus_handler)
+                self.processed_chars += len(remaining_text)
                 return True
+            else:
+                self.processed_chars += len(remaining_text)
         return False
 
     def _apply_percentage_params(self, config):
