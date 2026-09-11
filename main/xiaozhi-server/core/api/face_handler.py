@@ -289,8 +289,7 @@ class FaceWebHandler:
             data = {}
         sentinel = FaceSentinel()
         name = data.get("name", "布布爸爸")
-        is_family = data.get("is_family", True)
-        event = sentinel.trigger_greeting(name, is_family)
+        event = sentinel.trigger_greeting(name, is_family, "clear_family", "控制台测试触发")
         return web.json_response({"code": 0, "success": True, "msg": "success", "data": event})
 
     async def handle_sentinel_sleep(self, request):
