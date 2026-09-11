@@ -64,6 +64,12 @@
         #nav-face-custom-tab:hover svg {
             stroke: #409eff !important;
         }
+        #nav-console-custom-tab:hover .nav-text {
+            color: #4f46e5 !important;
+        }
+        #nav-console-custom-tab:hover svg {
+            stroke: #4f46e5 !important;
+        }
 
         /* 智能体卡片【人脸识别】药丸按钮 */
         .face-card-custom-btn {
@@ -90,8 +96,33 @@
             box-shadow: 0 2px 8px rgba(64, 158, 255, 0.25) !important;
         }
 
+        /* 智能体卡片【全能控制台】药丸按钮 */
+        .console-card-custom-btn {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 4px 14px !important;
+            font-size: 13px !important;
+            border-radius: 16px !important;
+            background-color: #eef2ff !important;
+            color: #4f46e5 !important;
+            cursor: pointer !important;
+            margin-right: 8px !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            user-select: none !important;
+            font-weight: 500 !important;
+            border: 1px solid #e0e7ff !important;
+            box-sizing: border-box !important;
+        }
+        .console-card-custom-btn:hover {
+            background-color: #4f46e5 !important;
+            color: #ffffff !important;
+            border-color: #4f46e5 !important;
+            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25) !important;
+        }
+
         /* 炫酷悬浮大屏工作台弹窗动画与毛玻璃质感 */
-        #face-memory-modal {
+        #console-modal, #face-memory-modal {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(15, 23, 42, 0.65);
@@ -105,11 +136,11 @@
             opacity: 0;
             transition: opacity 0.25s ease;
         }
-        #face-memory-modal.active {
+        #console-modal.active, #face-memory-modal.active {
             display: flex;
             opacity: 1;
         }
-        #face-memory-iframe-container {
+        #console-iframe-container, #face-memory-iframe-container {
             width: 100%;
             max-width: 1380px;
             height: 90vh;
@@ -122,7 +153,7 @@
             transform: scale(0.95);
             transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        #face-memory-modal.active #face-memory-iframe-container {
+        #console-modal.active #console-iframe-container, #face-memory-modal.active #face-memory-iframe-container {
             transform: scale(1);
         }
         .modal-header-btn {
@@ -151,7 +182,7 @@
 <body>
     <div id="app"></div>
 
-    <!-- 内嵌炫酷悬浮大屏工作台弹窗 -->
+    <!-- 内嵌炫酷悬浮大屏工作台弹窗 - 人脸记忆 -->
     <div id="face-memory-modal" onclick="handleBackdropClick(event)">
         <div id="face-memory-iframe-container" onclick="event.stopPropagation()">
             <div style="padding: 12px 24px; background: #ffffff; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; user-select: none;">
@@ -168,8 +199,33 @@
         </div>
     </div>
 
+    <!-- 内嵌全能智能中枢智控台弹窗 - 8003/console -->
+    <div id="console-modal" onclick="handleConsoleBackdropClick(event)">
+        <div id="console-iframe-container" onclick="event.stopPropagation()">
+            <div style="padding: 12px 24px; background: #ffffff; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; user-select: none;">
+                <div style="display: flex; align-items: center; gap: 10px; font-weight: 700; color: #0f172a; font-size: 15px;">
+                    <div style="width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);">🎛️</div>
+                    <span>小智 AI · 全能智能中枢智控台 (视觉哨兵 / 音乐曲库 / 邮件通讯录 / 多机拓扑)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    <a id="console-direct-link" href="/console" target="_blank" style="font-size: 13px; color: #4f46e5; text-decoration: none; padding: 6px 14px; border-radius: 8px; background: #eef2ff; font-weight: 600; border: 1px solid #e0e7ff; transition: all 0.2s;">新窗口独立打开 ↗</a>
+                    <button class="modal-header-btn" onclick="closeConsoleModal()" title="关闭 (Esc)">✕</button>
+                </div>
+            </div>
+            <iframe id="console-iframe" src="" style="width: 100%; height: 100%; border: none; background: #f8fafc;"></iframe>
+        </div>
+    </div>
+
     <script>
-        // 弹窗控制方法
+        function getConsoleTargetUrl() {
+            // 如果是在 8002 端口访问，优先尝试同源代理 /console 或 8003 端口直连
+            if (window.location.port === '8002') {
+                return `http://${window.location.hostname}:8003/console`;
+            }
+            return '/console';
+        }
+
+        // 弹窗控制方法 - 人脸记忆
         function openFaceMemoryModal() {
             const modal = document.getElementById('face-memory-modal');
             const iframe = document.getElementById('face-iframe');
@@ -181,7 +237,7 @@
 
         function closeFaceMemoryModal() {
             const modal = document.getElementById('face-memory-modal');
-            modal.classList.remove('active');
+            if (modal) modal.classList.remove('active');
         }
 
         function handleBackdropClick(event) {
@@ -190,10 +246,35 @@
             }
         }
 
-        // 监听 ESC 键关闭弹窗
+        // 弹窗控制方法 - 全能控制台
+        function openConsoleModal() {
+            const modal = document.getElementById('console-modal');
+            const iframe = document.getElementById('console-iframe');
+            const directLink = document.getElementById('console-direct-link');
+            const targetUrl = getConsoleTargetUrl();
+            if (directLink) directLink.href = targetUrl;
+            if (!iframe.src || iframe.src === window.location.href || !iframe.src.includes('/console')) {
+                iframe.src = targetUrl;
+            }
+            modal.classList.add('active');
+        }
+
+        function closeConsoleModal() {
+            const modal = document.getElementById('console-modal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        function handleConsoleBackdropClick(event) {
+            if (event.target.id === 'console-modal') {
+                closeConsoleModal();
+            }
+        }
+
+        // 监听 ESC 键关闭所有活动弹窗
         window.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeFaceMemoryModal();
+                closeConsoleModal();
             }
         });
 
@@ -214,30 +295,62 @@
             }
         }
 
-        // 2. 原生低调注入人脸菜单与卡片按钮，点击唤起悬浮大屏弹窗
+        // 2. 原生低调注入人脸菜单、全能智控台与卡片按钮，点击唤起悬浮大屏弹窗
         function syncFaceUI() {
             initNavSmoothScroll();
 
             // A. 顶部导航栏：点击唤起悬浮工作台
             const headerCenter = document.querySelector('.header-center');
-            if (headerCenter && !document.getElementById('nav-face-custom-tab')) {
-                const tabs = headerCenter.querySelectorAll('.equipment-management');
-                for (let tab of tabs) {
-                    if (tab.innerText && tab.innerText.includes('知识库')) {
-                        const faceTab = document.createElement('div');
-                        faceTab.id = 'nav-face-custom-tab';
-                        faceTab.className = 'equipment-management';
-                        faceTab.style.cssText = 'cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap;';
-                        faceTab.innerHTML = `
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#606266" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle; transition: stroke 0.2s;">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="12" cy="7" r="4"></circle>
+            if (headerCenter) {
+                // A1. 人脸记忆标签
+                if (!document.getElementById('nav-face-custom-tab')) {
+                    const tabs = headerCenter.querySelectorAll('.equipment-management');
+                    for (let tab of tabs) {
+                        if (tab.innerText && tab.innerText.includes('知识库')) {
+                            const faceTab = document.createElement('div');
+                            faceTab.id = 'nav-face-custom-tab';
+                            faceTab.className = 'equipment-management';
+                            faceTab.style.cssText = 'cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap;';
+                            faceTab.innerHTML = `
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#606266" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle; transition: stroke 0.2s;">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                                <span class="nav-text" style="font-size: 14px; color: #303133; font-weight: normal; line-height: 1; transition: color 0.2s;">人脸记忆</span>
+                            `;
+                            faceTab.onclick = openFaceMemoryModal;
+                            tab.parentNode.insertBefore(faceTab, tab.nextSibling);
+                            break;
+                        }
+                    }
+                }
+
+                // A2. 全能智控台标签
+                if (!document.getElementById('nav-console-custom-tab')) {
+                    const faceTab = document.getElementById('nav-face-custom-tab');
+                    const targetRef = faceTab || headerCenter.querySelector('.equipment-management:last-child');
+                    if (targetRef && targetRef.parentNode) {
+                        const consoleTab = document.createElement('div');
+                        consoleTab.id = 'nav-console-custom-tab';
+                        consoleTab.className = 'equipment-management';
+                        consoleTab.style.cssText = 'cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap; margin-left: 12px;';
+                        consoleTab.innerHTML = `
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: middle; transition: stroke 0.2s;">
+                                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                                <rect x="9" y="9" width="6" height="6"></rect>
+                                <line x1="9" y1="1" x2="9" y2="4"></line>
+                                <line x1="15" y1="1" x2="15" y2="4"></line>
+                                <line x1="9" y1="20" x2="9" y2="23"></line>
+                                <line x1="15" y1="20" x2="15" y2="23"></line>
+                                <line x1="20" y1="9" x2="23" y2="9"></line>
+                                <line x1="20" y1="14" x2="23" y2="14"></line>
+                                <line x1="1" y1="9" x2="4" y2="9"></line>
+                                <line x1="1" y1="14" x2="4" y2="14"></line>
                             </svg>
-                            <span class="nav-text" style="font-size: 14px; color: #303133; font-weight: normal; line-height: 1; transition: color 0.2s;">人脸记忆</span>
+                            <span class="nav-text" style="font-size: 14px; color: #4f46e5; font-weight: 600; line-height: 1; transition: color 0.2s;">全能智控台</span>
                         `;
-                        faceTab.onclick = openFaceMemoryModal;
-                        tab.parentNode.insertBefore(faceTab, tab.nextSibling);
-                        break;
+                        consoleTab.onclick = openConsoleModal;
+                        targetRef.parentNode.insertBefore(consoleTab, targetRef.nextSibling);
                     }
                 }
             }
@@ -247,16 +360,31 @@
             for (let b of btns) {
                 if (b.innerText && b.innerText.trim() === '声纹识别') {
                     const parent = b.parentNode;
-                    if (parent && !parent.querySelector('.face-card-custom-btn')) {
-                        const faceBtn = document.createElement('div');
-                        faceBtn.className = 'face-card-custom-btn';
-                        faceBtn.innerText = '人脸识别';
-                        faceBtn.onclick = function(e) {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            openFaceMemoryModal();
-                        };
-                        parent.insertBefore(faceBtn, b.nextSibling);
+                    if (parent) {
+                        // 注入人脸识别按钮
+                        if (!parent.querySelector('.face-card-custom-btn')) {
+                            const faceBtn = document.createElement('div');
+                            faceBtn.className = 'face-card-custom-btn';
+                            faceBtn.innerText = '人脸识别';
+                            faceBtn.onclick = function(e) {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                openFaceMemoryModal();
+                            };
+                            parent.insertBefore(faceBtn, b.nextSibling);
+                        }
+                        // 注入全能控制台按钮
+                        if (!parent.querySelector('.console-card-custom-btn')) {
+                            const consoleBtn = document.createElement('div');
+                            consoleBtn.className = 'console-card-custom-btn';
+                            consoleBtn.innerText = '全能控制台';
+                            consoleBtn.onclick = function(e) {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                openConsoleModal();
+                            };
+                            parent.appendChild(consoleBtn);
+                        }
                     }
                 }
             }
@@ -265,4 +393,4 @@
         setInterval(syncFaceUI, 300);
     </script>
 </body>
-</html>
+</html>

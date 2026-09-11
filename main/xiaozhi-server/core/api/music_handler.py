@@ -83,7 +83,7 @@ class MusicWebHandler:
                                 songs.append(info)
                                 total_size += info["size"]
 
-            active_conns = list(ConnectionRegistry._connections.keys())
+            active_devices = ConnectionRegistry.get_devices_summary()
             
             return web.json_response({
                 "code": 0,
@@ -93,7 +93,9 @@ class MusicWebHandler:
                     "total_count": len(songs),
                     "total_size": total_size,
                     "total_size_formatted": f"{total_size / (1024 * 1024):.2f} MB",
-                    "device_online": len(active_conns) > 0,
+                    "device_online": len(active_devices) > 0,
+                    "device_count": len(active_devices),
+                    "devices": active_devices,
                     "supported_formats": ["MP3", "WAV", "M4A", "FLAC", "AAC", "OGG"],
                     "songs": songs
                 }
@@ -244,11 +246,12 @@ class MusicWebHandler:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
 
     async def handle_play_on_device(self, request):
-        """一键向在线 ESP32 音箱直接推送播放音频流（零延迟、100%可靠）"""
+        """向在线 ESP32 音箱推送播放音频流（支持指定设备或全屋广播）"""
         try:
             data = await request.json()
             filename = data.get("filename", "").strip()
             title = data.get("title", "") or os.path.splitext(os.path.basename(filename))[0]
+            target_device_id = data.get("device_id", "").strip()
 
             if not filename:
                 return web.json_response({"code": 400, "success": False, "msg": "未指定歌曲"})
@@ -260,7 +263,18 @@ class MusicWebHandler:
             if not os.path.exists(music_file):
                 return web.json_response({"code": 404, "success": False, "msg": f"音乐文件不存在: {filename}"})
 
-            active_conns = list(ConnectionRegistry._connections.values())
+            if target_device_id and target_device_id != "all":
+                target_conn = ConnectionRegistry.get_connection(target_device_id)
+                if not target_conn:
+                    return web.json_response({
+                        "code": 404,
+                        "success": False,
+                        "msg": f"指定的目标音箱 ({target_device_id}) 当前不在线"
+                    })
+                active_conns = [target_conn]
+            else:
+                active_conns = list(ConnectionRegistry._connections.values())
+
             if not active_conns:
                 return web.json_response({
                     "code": 400,
@@ -273,6 +287,7 @@ class MusicWebHandler:
             import uuid
 
             from core.handle.sendAudioHandle import send_tts_message
+            pushed_count = 0
             for conn in active_conns:
                 try:
                     conn.client_abort = False
@@ -313,28 +328,42 @@ class MusicWebHandler:
                             content_type=ContentType.ACTION,
                         )
                     )
-                    logger.bind(tag=TAG).info(f"已直接将音乐 {filename} 推送到设备 TTS 队列")
+                    pushed_count += 1
+                    logger.bind(tag=TAG).info(f"已直接将音乐 {filename} 推送到设备 {getattr(conn, 'device_id', 'unknown')} TTS 队列")
                 except Exception as ce:
                     logger.bind(tag=TAG).error(f"推送音乐到连接失败: {ce}")
 
+            target_desc = f"指定设备 ({target_device_id})" if target_device_id and target_device_id != "all" else f"{pushed_count} 台在线音箱"
             return web.json_response({
                 "code": 0,
                 "success": True,
-                "msg": f"已成功向小智音箱推送播放：《{title}》"
+                "msg": f"已成功向 {target_desc} 推送播放：《{title}》"
             })
         except Exception as e:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
 
     async def handle_stop_device(self, request):
-        """一键打断并停止所有在线 ESP32 音箱的音乐/语音播放"""
+        """一键打断并停止在线 ESP32 音箱的音乐/语音播放（支持指定设备或全部）"""
         try:
+            target_device_id = None
+            try:
+                data = await request.json()
+                target_device_id = data.get("device_id", "").strip() if data else None
+            except Exception:
+                pass
+
             from core.handle.abortHandle import handleAbortMessage
-            active_conns = list(ConnectionRegistry._connections.values())
+            if target_device_id and target_device_id != "all":
+                target_conn = ConnectionRegistry.get_connection(target_device_id)
+                active_conns = [target_conn] if target_conn else []
+            else:
+                active_conns = list(ConnectionRegistry._connections.values())
+
             if not active_conns:
                 return web.json_response({
                     "code": 400,
                     "success": False,
-                    "msg": "当前没有在线连接的 ESP32 设备"
+                    "msg": "当前没有在线连接的对应 ESP32 设备"
                 })
             
             stopped_count = 0
@@ -345,10 +374,12 @@ class MusicWebHandler:
                 except Exception as ce:
                     logger.bind(tag=TAG).error(f"打断设备播放失败: {ce}")
                     
+            target_desc = f"指定设备 ({target_device_id})" if target_device_id and target_device_id != "all" else f"{stopped_count} 台在线音箱"
             return web.json_response({
                 "code": 0,
                 "success": True,
-                "msg": f"已成功向 {stopped_count} 台在线音箱发送即时停止指令"
+                "msg": f"已成功向 {target_desc} 发送即时停止指令"
             })
         except Exception as e:
             return web.json_response({"code": 500, "success": False, "msg": str(e)})
+

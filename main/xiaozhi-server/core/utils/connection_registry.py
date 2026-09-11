@@ -66,5 +66,30 @@ class ConnectionRegistry:
         return success
 
     @classmethod
+    def get_devices_summary(cls):
+        import time
+        with cls._lock:
+            devices = []
+            now_ms = time.time() * 1000
+            for dev_id, handler in cls._connections.items():
+                first_time = getattr(handler, 'first_activity_time', None)
+                last_time = getattr(handler, 'last_activity_time', None)
+                devices.append({
+                    "device_id": dev_id,
+                    "client_ip": getattr(handler, 'client_ip', '未知IP'),
+                    "sample_rate": getattr(handler, 'sample_rate', 16000),
+                    "connected_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(first_time / 1000)) if first_time else "-",
+                    "last_active": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_time / 1000)) if last_time else "-",
+                    "idle_seconds": int((now_ms - last_time) / 1000) if last_time else 0,
+                    "online": True
+                })
+            return devices
+
+    @classmethod
+    def get_connection(cls, device_id: str):
+        with cls._lock:
+            return cls._connections.get(device_id)
+
+    @classmethod
     def broadcast_chat(cls, query: str):
         return cls.broadcast_proactive_chat(query)

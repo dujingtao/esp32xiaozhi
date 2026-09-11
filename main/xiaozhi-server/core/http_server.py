@@ -1,4 +1,4 @@
-﻿import os
+import os
 import asyncio
 from aiohttp import web
 from config.logger import setup_logging
@@ -33,6 +33,63 @@ class SimpleHttpServer:
             with open(html_path, "r", encoding="utf-8") as f:
                 return web.Response(text=f.read(), content_type="text/html")
         return web.Response(text="<h1>Console Admin Page Not Found</h1>", content_type="text/html", status=404)
+
+    async def handle_get_devices(self, request):
+        from core.utils.connection_registry import ConnectionRegistry
+        devices = ConnectionRegistry.get_devices_summary()
+        return web.json_response({
+            "code": 0,
+            "success": True,
+            "msg": "success",
+            "data": {
+                "total_online": len(devices),
+                "devices": devices
+            }
+        })
+
+    async def handle_device_speak(self, request):
+        try:
+            data = await request.json()
+            text = data.get("text", "").strip()
+            device_id = data.get("device_id", "").strip()
+            if not text:
+                return web.json_response({"code": 400, "success": False, "msg": "播报文本不能为空"})
+            
+            from core.utils.connection_registry import ConnectionRegistry
+            if device_id and device_id != "all":
+                target_conn = ConnectionRegistry.get_connection(device_id)
+                if not target_conn:
+                    return web.json_response({"code": 404, "success": False, "msg": f"目标音箱 ({device_id}) 当前离线"})
+                conns = [target_conn]
+            else:
+                conns = ConnectionRegistry.get_active_connections()
+            
+            if not conns:
+                return web.json_response({"code": 400, "success": False, "msg": "当前没有在线连接的音箱设备"})
+            
+            success_count = 0
+            for handler in conns:
+                try:
+                    if hasattr(handler, 'proactive_wake_and_chat'):
+                        handler.proactive_wake_and_chat(text)
+                        success_count += 1
+                    elif hasattr(handler, 'chat'):
+                        if hasattr(handler, 'executor') and handler.executor:
+                            handler.executor.submit(handler.chat, text)
+                        else:
+                            handler.chat(text)
+                        success_count += 1
+                except Exception as e:
+                    self.logger.bind(tag=TAG).error(f"handle_device_speak error: {e}")
+            
+            target_desc = f"指定设备 ({device_id})" if device_id and device_id != "all" else f"{success_count} 台在线音箱"
+            return web.json_response({
+                "code": 0,
+                "success": True,
+                "msg": f"已成功向 {target_desc} 推送语音播报"
+            })
+        except Exception as e:
+            return web.json_response({"code": 500, "success": False, "msg": str(e)})
 
     def _get_websocket_url(self, local_ip: str, port: int) -> str:
         server_config = self.config["server"]
@@ -71,6 +128,9 @@ class SimpleHttpServer:
                         # 🎛️ 小智全能一体化智控中枢 (Unified Console)
                         web.get("/console", self.handle_console_page),
                         web.get("/console/", self.handle_console_page),
+                        web.get("/api/devices", self.handle_get_devices),
+                        web.get("/api/devices/list", self.handle_get_devices),
+                        web.post("/api/devices/speak", self.handle_device_speak),
                         # 邮件与通讯录中枢管理后台
                         web.get("/email", self.email_handler.handle_page),
                         web.get("/email/", self.email_handler.handle_page),

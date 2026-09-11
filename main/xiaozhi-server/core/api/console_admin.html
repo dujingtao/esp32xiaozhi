@@ -372,6 +372,9 @@
                 </div>
                 <audio id="global-audio-player" controls class="h-8 max-w-xs sm:max-w-md w-full"></audio>
                 <div class="flex items-center gap-2">
+                    <select id="music-target-device" class="text-xs bg-indigo-50 border border-indigo-200 rounded-xl px-2 py-1.5 font-semibold text-indigo-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
+                        <option value="all">📢 全部在线音箱广播</option>
+                    </select>
                     <button id="btn-push-current" onclick="playCurrentOnDevice()" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-md shadow-indigo-100">
                         <i class="fa-solid fa-tower-broadcast"></i> 在音箱播放
                     </button>
@@ -501,65 +504,73 @@
         <!-- ======================================================== -->
         <section id="pane-device" class="tab-pane space-y-6">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- 硬件连接卡片 -->
-                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm">
-                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2 mb-4">
-                        <i class="fa-solid fa-server text-indigo-600"></i>
-                        ESP32 设备与 WebSocket 链路
-                    </h2>
-                    <div class="space-y-3 text-xs">
-                        <div class="flex justify-between py-2 border-b border-slate-100">
-                            <span class="text-slate-500">设备型号</span>
-                            <span class="font-bold text-slate-800">bread-compact-wifi (ESP32-S3)</span>
+                <!-- 硬件连接卡片 (多设备拓扑与实时状态动态渲染) -->
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fa-solid fa-server text-indigo-600"></i>
+                                在线 ESP32 音箱拓扑 (多机协同)
+                            </h2>
+                            <span id="badge-device-online-count" class="px-2.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200">
+                                0 台在线
+                            </span>
                         </div>
-                        <div class="flex justify-between py-2 border-b border-slate-100">
-                            <span class="text-slate-500">物理 MAC 地址</span>
-                            <span class="font-mono text-slate-800">28:84:85:47:89:58</span>
+                        <p class="text-xs text-slate-500 mb-3">多台 ESP32 硬件通过独立 MAC 唯一对应各自智能体配置与音频会话。</p>
+                        <!-- 动态渲染的设备列表容器 -->
+                        <div id="online-devices-list" class="space-y-3">
+                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-400">
+                                <i class="fa-solid fa-spinner fa-spin mr-1.5"></i> 正在拉取在线设备列表...
+                            </div>
                         </div>
-                        <div class="flex justify-between py-2 border-b border-slate-100">
-                            <span class="text-slate-500">固件版本</span>
-                            <span class="font-bold text-indigo-600">v2.5.0 (ESP-IDF v6.0.2)</span>
-                        </div>
-                        <div class="flex justify-between py-2 border-b border-slate-100">
-                            <span class="text-slate-500">音频传输参数</span>
-                            <span class="text-slate-800">Opus 16kHz Mono (60ms Frame)</span>
-                        </div>
-                        <div class="flex items-center justify-between py-2 border-b border-slate-100">
-                            <span class="text-slate-500">已加载工具数量</span>
-                            <button onclick="openToolsModal()" class="group flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold border border-emerald-200 text-xs transition-all shadow-sm hover:shadow active:scale-95 cursor-pointer" title="点击查看已加载的 41 项全能工具调用清单">
-                                <i class="fa-solid fa-cubes text-emerald-600 group-hover:rotate-12 transition-transform"></i>
-                                <span>31 服务插件 + 10 硬件MCP工具</span>
-                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-emerald-500 ml-0.5"></i>
-                            </button>
-                        </div>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                        <span class="text-[11px] text-slate-400 font-mono">ConnectionRegistry 动态链路池</span>
+                        <button onclick="openToolsModal()" class="group flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold border border-emerald-200 text-xs transition shadow-sm cursor-pointer" title="点击查看已挂载的 41 项全能工具调用清单">
+                            <i class="fa-solid fa-cubes text-emerald-600"></i>
+                            <span>41 项中枢工具矩阵</span>
+                            <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-emerald-500 ml-0.5"></i>
+                        </button>
                     </div>
                 </div>
 
-                <!-- 社交规则与状态机卡片 -->
-                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm">
-                    <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2 mb-4">
-                        <i class="fa-solid fa-masks-theater text-indigo-600"></i>
-                        智能社交规则状态机 (Social Etiquette Engine)
-                    </h2>
-                    <div class="space-y-4">
-                        <div class="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100 text-xs">
-                            <div class="flex items-center gap-2 font-bold text-indigo-900 mb-1">
-                                <i class="fa-solid fa-circle-check text-indigo-600"></i>
-                                <span>当前社交状态：热情就绪 / 静默待命中</span>
+                <!-- 社交规则与定向快速播报卡片 -->
+                <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2 mb-4">
+                            <i class="fa-solid fa-masks-theater text-indigo-600"></i>
+                            定向播报与社交状态机 (Multi-Device Dispatcher)
+                        </h2>
+                        <div class="space-y-4">
+                            <div class="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100 text-xs">
+                                <div class="flex items-center gap-2 font-bold text-indigo-900 mb-1">
+                                    <i class="fa-solid fa-circle-check text-indigo-600"></i>
+                                    <span>多硬件精准对应机制：</span>
+                                </div>
+                                <p class="text-indigo-700 text-[11px] leading-relaxed">
+                                    • <strong>毛毛一号 / 毛毛二号</strong> 在 8002 总后台由各自 MAC 绑定不同智能体（人设/音色/模型独立运作）。<br/>
+                                    • 在本智控台中，支持对特定音箱进行<strong>定向发声测试与单机打断</strong>，也可进行<strong>全屋同步广播</strong>。
+                                </p>
                             </div>
-                            <p class="text-indigo-700 text-[11px] leading-relaxed">
-                                视觉初见仅 1 句轻量问候；未回应即刻闭嘴退场；静默监听中不主动插话，喊“小智”瞬间唤醒。
-                            </p>
-                        </div>
 
-                        <!-- 快速播报测试 -->
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">快速向音箱推送语音播报 (TTS)</label>
-                            <div class="flex gap-2">
-                                <input type="text" id="tts-quick-text" placeholder="输入一句话测试音箱发声..." class="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50">
-                                <button onclick="sendQuickTTS()" class="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition">
-                                    推送播报
-                                </button>
+                            <!-- 快速播报测试（支持设备选择） -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <label class="block text-xs font-medium text-slate-700">快速向音箱推送语音播报 (TTS)</label>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-[11px] text-slate-500">目标音箱:</span>
+                                        <select id="tts-target-device" class="text-xs bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
+                                            <option value="all">📢 全部在线音箱 (全屋广播)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="text" id="tts-quick-text" placeholder="输入一句话测试音箱发声 (如：你好，我是毛毛)..." class="flex-1 px-3 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50">
+                                    <button onclick="sendQuickTTS()" class="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition flex items-center gap-1.5 shrink-0 shadow-sm shadow-indigo-100">
+                                        <i class="fa-solid fa-paper-plane"></i>
+                                        <span>推送播报</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1042,13 +1053,16 @@
             }
         }
 
-        async function playOnDeviceDirect(filename, title) {
-            Swal.fire({ title: `正在向小智音箱推送《${title}》...`, didOpen: () => Swal.showLoading() });
+        async function playOnDeviceDirect(filename, title, deviceId = null) {
+            const sel = document.getElementById('music-target-device');
+            const target = deviceId || (sel ? sel.value : 'all');
+            const targetDesc = target && target !== 'all' ? `指定设备 (${target.slice(-8)})` : '全部在线音箱';
+            Swal.fire({ title: `正在向 ${targetDesc} 推送《${title}》...`, didOpen: () => Swal.showLoading() });
             try {
                 const res = await fetch('/api/music/play_on_device', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({filename, title})
+                    body: JSON.stringify({filename, title, device_id: target})
                 });
                 const d = await res.json();
                 if (d.code === 0) {
@@ -1214,26 +1228,109 @@
             }
         }
 
-        // ── 4. 全局设备状态与操作 ──
+        // ── 4. 全局多设备状态感知与协同控制 ──
+        let ONLINE_DEVICES = [];
+
         async function checkDeviceHeartbeat() {
             try {
-                const res = await fetch('/api/music/list');
+                const res = await fetch('/api/devices');
                 const data = await res.json();
+                const devices = (data.data && data.data.devices) ? data.data.devices : [];
+                ONLINE_DEVICES = devices;
+
+                // 顶部状态胶囊更新
                 const badge = document.getElementById('device-status-badge');
                 const text = document.getElementById('device-status-text');
-                if (data.data && data.data.device_online) {
+                if (devices.length > 0) {
                     badge.className = 'hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200';
-                    text.innerText = 'ESP32 音箱在线';
+                    text.innerText = `${devices.length} 台音箱在线`;
                 } else {
                     badge.className = 'hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200';
                     text.innerText = '音箱等待连接';
                 }
+
+                // Tab 4 在线计数徽章
+                const countBadge = document.getElementById('badge-device-online-count');
+                if (countBadge) countBadge.innerText = `${devices.length} 台在线`;
+
+                // 动态渲染在线设备拓扑卡片
+                renderOnlineDevicesUI(devices);
+
+                // 更新下拉目标设备列表 (TTS 播报 & 音乐推送)
+                updateDeviceSelectors(devices);
             } catch (e) {}
         }
 
-        async function stopSpeakerDevice() {
+        function renderOnlineDevicesUI(devices) {
+            const container = document.getElementById('online-devices-list');
+            if (!container) return;
+
+            if (!devices.length) {
+                container.innerHTML = `
+                    <div class="p-6 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-400">
+                        <i class="fa-solid fa-tower-broadcast text-lg mb-1.5 text-slate-300 block"></i>
+                        当前暂无在线 ESP32 音箱，请确认硬件已开机并连上 Wi-Fi
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = devices.map(d => `
+                <div class="p-4 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-indigo-300 transition space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span class="font-bold text-slate-900 text-xs">${d.device_id.includes('28:84:85') ? '毛毛二号 (Compact S3)' : (d.device_id.includes('dc:54:75') ? '毛毛一号 (Bread S3)' : 'ESP32 音箱')}</span>
+                            <span class="text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-600 font-mono font-semibold">${d.sample_rate || 16000}Hz Opus</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="testSpeakDevice('${d.device_id}')" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-semibold text-[11px] transition" title="向该音箱定向发声测试">
+                                定向发声
+                            </button>
+                            <button onclick="stopSpeakerDevice('${d.device_id}')" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold text-[11px] transition" title="单独打断该音箱">
+                                打断
+                            </button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-500 font-mono">
+                        <div>物理 MAC: <span class="text-slate-800 font-semibold">${d.device_id}</span></div>
+                        <div>终端 IP: <span class="text-slate-800 font-semibold">${d.client_ip}</span></div>
+                        <div>已连线: <span class="text-slate-700">${d.connected_at}</span></div>
+                        <div>最近活跃: <span class="text-emerald-600 font-semibold">${d.idle_seconds}s 前</span></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateDeviceSelectors(devices) {
+            const selectors = ['tts-target-device', 'music-target-device'];
+            selectors.forEach(id => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                const prevVal = sel.value;
+                const isMusic = (id === 'music-target-device');
+                const defaultLabel = isMusic ? '📢 全部在线音箱广播' : '📢 全部在线音箱 (全屋广播)';
+                
+                let opts = `<option value="all">${defaultLabel}</option>`;
+                devices.forEach(d => {
+                    const devName = d.device_id.includes('28:84:85') ? '毛毛二号' : (d.device_id.includes('dc:54:75') ? '毛毛一号' : `音箱(${d.device_id.slice(-8)})`);
+                    opts += `<option value="${d.device_id}">🔊 ${devName} (${d.client_ip})</option>`;
+                });
+                sel.innerHTML = opts;
+                if (prevVal && sel.querySelector(`option[value="${prevVal}"]`)) {
+                    sel.value = prevVal;
+                }
+            });
+        }
+
+        async function stopSpeakerDevice(deviceId = null) {
             try {
-                const res = await fetch('/api/music/stop_device', { method: 'POST' });
+                const body = deviceId ? JSON.stringify({device_id: deviceId}) : null;
+                const res = await fetch('/api/music/stop_device', {
+                    method: 'POST',
+                    headers: body ? {'Content-Type': 'application/json'} : {},
+                    body
+                });
                 const d = await res.json();
                 Swal.fire({
                     toast: true,
@@ -1244,6 +1341,26 @@
                     timer: 2000
                 });
             } catch (e) {}
+        }
+
+        async function testSpeakDevice(deviceId) {
+            const text = `你好，我是小智。当前已连通至智控台，通信正常。`;
+            Swal.fire({ title: `正在向音箱 (${deviceId.slice(-8)}) 发声测试...`, didOpen: () => Swal.showLoading() });
+            try {
+                const res = await fetch('/api/devices/speak', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({text, device_id: deviceId})
+                });
+                const d = await res.json();
+                if (d.code === 0) {
+                    Swal.fire('发声测试成功', d.msg, 'success');
+                } else {
+                    Swal.fire('发声测试失败', d.msg, 'warning');
+                }
+            } catch (e) {
+                Swal.fire('发声测试异常', e.message, 'error');
+            }
         }
 
         // ── 41 项全能工具矩阵悬浮弹窗驱动 ──
@@ -1423,17 +1540,29 @@
         }
 
         async function sendQuickTTS() {
-            const text = document.getElementById('tts-quick-text').value.trim();
+            const textInput = document.getElementById('tts-quick-text');
+            const text = textInput ? textInput.value.trim() : '';
             if (!text) return;
+            const sel = document.getElementById('tts-target-device');
+            const target = sel ? sel.value : 'all';
+
             Swal.fire({ title: '正在推送播报...', didOpen: () => Swal.showLoading() });
-            // 调用模拟问候或设备播报
-            const res = await fetch('/api/faces/sentinel/trigger_test', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({name: '布布爸爸', custom_text: text})
-            });
-            Swal.fire('已推送播报', text, 'success');
-            document.getElementById('tts-quick-text').value = '';
+            try {
+                const res = await fetch('/api/devices/speak', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({text, device_id: target})
+                });
+                const d = await res.json();
+                if (d.code === 0) {
+                    Swal.fire('已推送播报', d.msg, 'success');
+                    if (textInput) textInput.value = '';
+                } else {
+                    Swal.fire('推送失败', d.msg, 'warning');
+                }
+            } catch (e) {
+                Swal.fire('推送异常', e.message, 'error');
+            }
         }
     </script>
 </body>
