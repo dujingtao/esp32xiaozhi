@@ -1,4 +1,4 @@
-# 动态自定义唤醒词与设备空间多级身份管理
+﻿# 动态自定义唤醒词与设备空间多级身份管理
 
 ## 1. 功能概述
 
@@ -119,28 +119,3 @@ self.device.set_wake_word({
 | **管家管家** | `guan jia guan jia` | `20 ~ 25` |
 | **你好小度** | `ni hao xiao du` | `20` |
 | **星期五** | `xing qi wu` | `20` |
-
----
-
-## 5. 面包板硬件适配与语音流畅度深度优化
-
-### 5.1 面包板硬件架构 (`bread-s3-es8311`)
-针对标准 ESP32-S3-WROOM-1 / N16R8 开发板搭配鹿川班/立创开源独立 ES8311 音频子板（集成 ES8311 Codec + NS4150B 3W 功放）：
-- **I2C 控制线**：SDA -> GPIO 1, SCL -> GPIO 2（开机自检与内部上拉）
-- **I2S 音频总线**：MCLK -> GPIO 38, BCLK -> GPIO 14, WS/LRCK -> GPIO 13, DIN -> GPIO 12, DOUT -> GPIO 11
-- **交互按键**：BOOT (GPIO 0) 短按交互/打断对话并播放提示音，长按 3 秒进入配网
-
-### 5.2 Wi-Fi 稳定性与 10 秒超时静态 IP 兜底机制
-针对移动光猫/部分家用路由器在 ESP32 默认省电休眠（Modem Sleep）时丢弃 DHCP OFFER 广播包的问题：
-1. **彻底关闭 Modem Sleep**：连接前后全程强制启用 `esp_wifi_set_ps(WIFI_PS_NONE)`；
-2. **10 秒 DHCP 静态 IP 自动兜底**：开机连接 Wi-Fi 后启动 10 秒计时器，若路由器 DHCP 服务器在 10 秒内未分配 IP，系统将自动分配局域网预留静态 IP（`192.168.1.188`，网关与主 DNS `192.168.1.1`，备用 DNS `114.114.114.114`），并主动派发 `IP_EVENT_STA_GOT_IP` 事件，100% 杜绝卡在配网或断连假死状态。
-
-### 5.3 语音播放卡顿的彻底消除方案
-针对播放语音时断断续续、吞字断音的问题，实施了三重针对性深度优化：
-1. **全时锁定性能模式 (`PERFORMANCE`)**：
-   重写板级 `SetPowerSaveLevel`，由于 USB 常电供电，永久锁定 Wi-Fi 性能模式（禁用 `WIFI_PS_MAX_MODEM` 休眠）。WebSocket 握手耗时从 3180ms 降低至 420ms，下行音频包延迟稳定在 <2ms，彻底解决播放缓冲区饥饿（Buffer Underrun）。
-2. **原生对齐 16000Hz 采样率**：
-   将 `AUDIO_INPUT_SAMPLE_RATE` 与 `AUDIO_OUTPUT_SAMPLE_RATE` 设为 16000Hz，与云端 Opus 格式及本地 AFE 降噪算法 1:1 严格对齐，彻底移除了 CPU 上的实时双向软件重采样算法（`esp_ae_rate_cvt`）开销。
-3. **ESP32-S3 CPU 主频拉满至 240MHz**：
-   构建配置启用 `CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y`，算力提升 50%，多任务并发调度丝滑流畅。
-

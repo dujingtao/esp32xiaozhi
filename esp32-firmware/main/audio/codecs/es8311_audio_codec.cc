@@ -66,8 +66,12 @@ void Es8311AudioCodec::ResetCodec() {
     // recommended by the initialization guide. Normal codec initialization
     // releases the reset and starts the state machine.
     uint8_t reset_value = 0x1F;
-    ESP_ERROR_CHECK(static_cast<esp_err_t>(
-        ctrl_if_->write_reg(ctrl_if_, 0x00, 1, &reset_value, 1)));
+    esp_err_t err = static_cast<esp_err_t>(
+        ctrl_if_->write_reg(ctrl_if_, 0x00, 1, &reset_value, 1));
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "ES8311 software reset failed: %s", esp_err_to_name(err));
+        return;
+    }
     vTaskDelay(pdMS_TO_TICKS(5));
     ESP_LOGI(TAG, "ES8311 software reset complete");
 }

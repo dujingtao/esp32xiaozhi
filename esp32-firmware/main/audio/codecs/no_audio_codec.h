@@ -10,6 +10,8 @@
 class NoAudioCodec : public AudioCodec {
 protected:
     std::mutex data_if_mutex_;
+    std::vector<int32_t> tx_buffer_;
+    std::vector<int32_t> rx_buffer_;
 
     virtual int Write(const int16_t* data, int samples) override;
     virtual int Read(int16_t* dest, int samples) override;

@@ -56,8 +56,15 @@ def get_project_version() -> Optional[str]:
 
 
 def _run_idf(*args: str, preview: bool = False) -> None:
-    idf_cmd = shutil.which("idf.py") or "idf.py"
-    command = [idf_cmd]
+    idf_path = os.environ.get("IDF_PATH", "")
+    idf_script = os.path.join(idf_path, "tools", "idf.py") if idf_path else None
+    
+    if idf_script and os.path.exists(idf_script):
+        command = [sys.executable, idf_script]
+    else:
+        idf_cmd = shutil.which("idf.py") or "idf.py"
+        command = [idf_cmd]
+
     if preview:
         command.append("--preview")
     command.extend(args)

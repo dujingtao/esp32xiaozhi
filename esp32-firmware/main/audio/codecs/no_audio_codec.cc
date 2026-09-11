@@ -217,7 +217,9 @@ NoAudioCodecSimplex::NoAudioCodecSimplex(int input_sample_rate, int output_sampl
 
 int NoAudioCodec::Write(const int16_t* data, int samples) {
     std::lock_guard<std::mutex> lock(data_if_mutex_);
-    std::vector<int32_t> buffer(samples);
+    if (tx_buffer_.size() < static_cast<size_t>(samples)) {
+        tx_buffer_.resize(samples);
+    }
 
     // output_volume_: 0-100
     // volume_factor_: 0-65536
@@ -225,16 +227,16 @@ int NoAudioCodec::Write(const int16_t* data, int samples) {
     for (int i = 0; i < samples; i++) {
         int64_t temp = int64_t(data[i]) * volume_factor; // 使用 int64_t 进行乘法运算
         if (temp > INT32_MAX) {
-            buffer[i] = INT32_MAX;
+            tx_buffer_[i] = INT32_MAX;
         } else if (temp < INT32_MIN) {
-            buffer[i] = INT32_MIN;
+            tx_buffer_[i] = INT32_MIN;
         } else {
-            buffer[i] = static_cast<int32_t>(temp);
+            tx_buffer_[i] = static_cast<int32_t>(temp);
         }
     }
 
     size_t bytes_written;
-    ESP_ERROR_CHECK(i2s_channel_write(tx_handle_, buffer.data(), samples * sizeof(int32_t), &bytes_written, portMAX_DELAY));
+    ESP_ERROR_CHECK(i2s_channel_write(tx_handle_, tx_buffer_.data(), samples * sizeof(int32_t), &bytes_written, portMAX_DELAY));
     return bytes_written / sizeof(int32_t);
 }
 
@@ -242,14 +244,16 @@ int NoAudioCodec::Read(int16_t* dest, int samples) {
     size_t bytes_read;
     constexpr uint32_t kReadTimeoutMs = 200;
 
-    std::vector<int32_t> bit32_buffer(samples);
-    if (i2s_channel_read(rx_handle_, bit32_buffer.data(), samples * sizeof(int32_t), &bytes_read, kReadTimeoutMs) != ESP_OK) {
+    if (rx_buffer_.size() < static_cast<size_t>(samples)) {
+        rx_buffer_.resize(samples);
+    }
+    if (i2s_channel_read(rx_handle_, rx_buffer_.data(), samples * sizeof(int32_t), &bytes_read, kReadTimeoutMs) != ESP_OK) {
         return 0;
     }
 
     samples = bytes_read / sizeof(int32_t);
     for (int i = 0; i < samples; i++) {
-        int32_t value = bit32_buffer[i] >> 12;
+        int32_t value = rx_buffer_[i] >> 12;
         dest[i] = (value > INT16_MAX) ? INT16_MAX : (value < -INT16_MAX) ? -INT16_MAX : (int16_t)value;
     }
     return samples;

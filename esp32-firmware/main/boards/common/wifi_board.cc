@@ -373,7 +373,9 @@ void WifiBoard::SetPowerSaveLevel(PowerSaveLevel level) {
     WifiPowerSaveLevel wifi_level;
     switch (level) {
         case PowerSaveLevel::LOW_POWER:
-            wifi_level = WifiPowerSaveLevel::LOW_POWER;
+            // Voice assistants require low network latency. MAX_MODEM causes 100-300ms DTIM sleep
+            // which causes audio packet queue starvation and stuttering. Use BALANCED (MIN_MODEM) for idle.
+            wifi_level = WifiPowerSaveLevel::BALANCED;
             break;
         case PowerSaveLevel::BALANCED:
             wifi_level = WifiPowerSaveLevel::BALANCED;
